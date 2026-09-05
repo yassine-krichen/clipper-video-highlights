@@ -1,0 +1,18 @@
+# default clipper config, spelled out explicitly (spec section 2.1).
+# pass with `clipper run <video.mp4> --config configs/podcast.yaml`.
+clip_count: 5
+min_duration_ms: 25000
+max_duration_ms: 90000
+content_type: podcast # podcast | interview | lecture | stream | auto
+language: auto # iso 639-1 or auto
+keywords: []
+editorial_instructions: ""
+platform: shorts # shorts | tiktok | reels | generic
+allow_multi_segment: false
+transcriber: groq # groq | faster_whisper
+llm_generator: gemini-flash # model alias, resolved via freellmapi (see DECISIONS.md)
+llm_judge: gemini-flash
+embedder: local # local | api
+render: false
+captions: false
+reframe: none # none | center | face

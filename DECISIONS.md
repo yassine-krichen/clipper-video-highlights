@@ -336,6 +336,111 @@ reviewed at each phase boundary (spec section 15).
     would justify one here, unlike `transcript.json`'s `Transcript` object
     which already carries `language`/`provider`/`model` alongside its words.
 
+- 2026-09-06: milestone m-llm-layer (`clipper/llm/registry.py`, `cache.py`,
+  `client.py`, spec section 7) judgment calls:
+  - `registry.py`'s `_MODEL_ALIASES` dict maps each alias
+    (`gemini-flash`/`gemini-pro`/`groq-llama`/`claude-sonnet`) to a
+    PLACEHOLDER model-name string following each provider's own public
+    naming convention (e.g. `"gemini-2.0-flash"`, `"llama-3.3-70b-versatile"`).
+    these are not verified against freellmapi's actual model catalog -- there
+    is no way to do that without calling the real, live proxy, which the
+    test suite must never do (spec section 13). must be checked/adjusted
+    against freellmapi's real catalog before any of the four aliases are
+    used for a real (non-mocked) call.
+  - cache lookup order (spec section 7 doesn't specify): `cache.py`'s
+    `get_cached_response` checks the run-local `run_dir/llm_cache/<key>.json`
+    first, then the global `~/.clipper/cache/<key>.json`. a global-only hit
+    is copied into run-local before returning, so every run directory stays
+    self-describing for later inspection/debugging without needing to
+    cross-reference the global cache.
+  - `client.py`'s cache key input component is `system_prompt + user_prompt`
+    -- everything that affects the model's output -- deliberately excluding
+    `temperature`, per the spec's literal `sha256(model + prompt_version +
+    input)` formula (section 7), which has no temperature term.
+  - `_estimate_cost_usd` (`client.py`) is a flat placeholder: `(tokens_in +
+    tokens_out) / 1000 * 0.0005`, input and output priced identically. real
+    per-model pricing needs calibration against freellmapi's actual
+    billing/passthrough behavior once that's knowable -- not guessable from
+    this codebase alone.
+  - `client.py`'s `_build_client` (an `AsyncOpenAI` client pointed at
+    `FREELLM_BASE_URL`/`FREELLM_API_KEY`) is a small, deliberate duplicate of
+    `clipper/transcribers/groq.py`'s sync `_build_client`, not factored into
+    a shared helper: both are ~6 lines, one sync (groq's transcription sdk
+    surface) and one async (spec section 4.7's up to 8 concurrent judge
+    calls), and a new shared module for this isn't listed in spec section
+    6's repository layout. the duplication is small enough that the extra
+    indirection of a shared module wasn't judged worth it; revisit if a
+    third call site needs the same construction logic.
+  - `complete_structured`'s retry loop treats "up to 3 times" (spec section
+    7) as 3 total attempts (not 3 retries after an initial attempt, i.e. 4
+    total) -- `_MAX_ATTEMPTS = 3`. `LLMSchemaError` is raised only after all
+    3 attempts fail json/schema validation; it is NOT the judge-specific
+    "dimensions all 5, standalone_level 2, reason 'judge failed'" fallback
+    from spec section 7 -- that fallback is judge-stage business logic and
+    belongs in the (later) judge stage, which will catch `LLMSchemaError`
+    and apply it. the generic client only raises.
+  - each llm call is recorded under `stats.json`'s `llm_calls` section keyed
+    by `f"{prompt_version}_{uuid4().hex[:12]}"` rather than by
+    `prompt_version` alone -- `record_stat`'s `(section, key)` pair
+    overwrites on collision (by design, see the m2 entry below), so a stable
+    key per prompt version would silently drop every call after the first
+    within the same run. a cache hit still records a `$0`/0-token entry
+    (spec section 7's cost accounting should reflect every call that
+    "happened", cache hit or not).
+
+- 2026-09-06: M6 review follow-up (`clipper/llm/client.py`, `cache.py`, spec section 7):
+  - blocking fix -- `_record_call_stat` was only called once, in
+    `complete_structured`'s success branch, using only the LAST attempt's
+    token counts. every earlier FAILED attempt in a retry sequence made a
+    real, billed api call whose tokens/cost were never recorded, and total
+    exhaustion (`LLMSchemaError`) recorded zero stats for any of the (up to
+    `_MAX_ATTEMPTS`) real calls made. fixed by moving the stat recording
+    inside the retry loop itself: each attempt's `usage` is read and
+    `_record_call_stat` called immediately after that attempt's api call
+    returns, before the json/schema validation that decides whether to
+    retry -- so a stat is recorded for every real call, success or failure,
+    with no separate "record on final exhaustion" step needed (each attempt
+    already recorded itself as it happened). confirmed via
+    `TestCompleteStructuredRetryThenSucceed` (asserts 2 recorded stats: the
+    failed attempt + the success) and `TestCompleteStructuredRetryExhausted`
+    (asserts 3 recorded stats, all failed) in `tests/unit/test_llm_client.py`.
+  - high-severity fix -- `_json_schema_response_format` passed
+    `response_model.model_json_schema()` verbatim with `"strict": True`, but
+    pydantic's `model_json_schema()` never emits `additionalProperties:
+    false` (top-level or under `$defs`) and excludes optional/defaulted
+    fields from `required` -- both are hard requirements of
+    OpenAI-compatible strict structured-output validation, and the schema
+    would very likely have been rejected by the real endpoint the first time
+    a response model had a nested submodel or an optional field (exactly
+    what M7's `JudgeResult`/generator response models need). fixed with a
+    new `_make_strict_schema`/`_strict_schema_node`/`_allow_null_type` schema
+    post-processing pass (`clipper/llm/client.py`) that recursively walks
+    every object-type node -- including everything under `$defs` -- setting
+    `additionalProperties: false` and promoting every property into
+    `required`, adding `null` as an allowed type/branch (via a type-array,
+    or an `anyOf` wrapper for bare `$ref` nodes) for any property pydantic
+    did NOT originally mark required. verified structurally (no live api
+    calls, per spec section 13) against a test model with a required string,
+    an optional/defaulted int, and a nested submodel
+    (`TestMakeStrictSchema` in `tests/unit/test_llm_client.py`).
+  - cache concurrency invariant documented in place, not changed:
+    `clipper/llm/cache.py` has no lock guarding `get_cached_response`'s
+    read-then-write-on-global-hit, which is safe under the current fully
+    synchronous file i/o because a given key is only ever written on a
+    genuine cache miss (no code path overwrites an existing entry with
+    different content) -- added a comment on `get_cached_response`
+    explaining this and calling out that wrapping the file i/o in
+    `asyncio.to_thread` (to stop it blocking the event loop during
+    concurrent judge-stage calls) would invalidate the reasoning and require
+    a lock like `record_stat`'s.
+  - extracted `clipper/util/atomic_write.py` (`atomic_write_json`,
+    `_replace_with_retry`) out of the near-verbatim duplication between
+    `clipper/util/log.py`'s `record_stat` and `clipper/llm/cache.py`'s
+    former `_atomic_write_json`/`_replace_with_retry` -- both now import and
+    call the shared helper. pure refactor: no observable behavior or
+    interface changed, confirmed by the full existing `test_log.py`/
+    `test_llm_cache.py` suites still passing unmodified.
+
 - 2026-09-06: `record_stat` (`clipper/util/log.py`) guards its read-modify-write of
   `stats.json` with an in-process `threading.Lock`, keyed by the file's resolved absolute path
   (a small dict of locks, itself guarded by a meta-lock for safe creation), rather than a

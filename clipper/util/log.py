@@ -11,12 +11,11 @@ per-stage dicts) that doesn't earn a fixed schema at this milestone.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import threading
-import time
 from datetime import UTC, datetime
 from pathlib import Path
+
+from clipper.util.atomic_write import atomic_write_json
 
 _LOG_FILENAME = "log.jsonl"
 _STATS_FILENAME = "stats.json"
@@ -82,25 +81,6 @@ def read_events(run_dir: Path, stage: str | None = None) -> list[dict[str, objec
     return events
 
 
-def _replace_with_retry(src: str, dst: Path, attempts: int = 5) -> None:
-    """`os.replace(src, dst)`, retrying briefly on `PermissionError`.
-
-    on windows, another process (antivirus, search indexer) can transiently
-    hold a newly-created file open for scanning right after it's written,
-    making `os.replace` fail with `WinError 5` even though nothing in this
-    process is still using the file. a short retry loop rides that out
-    without weakening the atomicity of the replace itself.
-    """
-    for attempt in range(attempts):
-        try:
-            os.replace(src, dst)
-            return
-        except PermissionError:
-            if attempt == attempts - 1:
-                raise
-            time.sleep(0.01 * (attempt + 1))
-
-
 def record_stat(run_dir: Path, section: str, key: str, value: object) -> None:
     """merge one value into `stats.json` at `data[section][key]` (spec
     section 10), read-modify-write so other sections/keys already present
@@ -119,17 +99,7 @@ def record_stat(run_dir: Path, section: str, key: str, value: object) -> None:
     with lock:
         stats = read_stats(run_dir)
         stats.setdefault(section, {})[key] = value
-
-        fd, tmp_name = tempfile.mkstemp(
-            dir=stats_path.parent, prefix=f".{_STATS_FILENAME}.", suffix=".tmp"
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(json.dumps(stats, indent=2))
-            _replace_with_retry(tmp_name, stats_path)
-        except BaseException:
-            os.remove(tmp_name)
-            raise
+        atomic_write_json(stats_path, stats)
 
 
 def read_stats(run_dir: Path) -> dict[str, object]:

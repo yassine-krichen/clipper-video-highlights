@@ -180,6 +180,162 @@ reviewed at each phase boundary (spec section 15).
   loading/CLI wiring belongs to the later CLI-wiring milestone (M15). flagging now so that
   milestone doesn't forget it.
 
+- 2026-09-06: milestone m5 (`clipper/stages/atomize.py`, spec section 4.3) judgment calls:
+  - pipeline order and iteration: the spec lists the four rules as
+    `split -> merge-short -> split-long -> compute-pauses` without saying
+    whether any step needs more than one pass. `split_into_atoms` runs once
+    (each word is visited exactly once, unambiguous). `merge_short_atoms`
+    runs to a fixed point (`while changed:` around a full left-to-right
+    pass): merging two atoms can make the merged atom's new neighbour need
+    re-checking (e.g. three consecutive 1-word atoms need two merge passes
+    to end up as one atom), so a single pass under-merges in that case.
+    **(corrected 2026-09-06, post-review, round 1)** `split_long_atoms` was
+    originally believed to be safe as a single pass, on the theory that
+    splitting at the single largest internal gap guarantees each resulting
+    half can't contain a *larger* gap than the one just used -- but that
+    only bounds the gap used for the *next* split, it says nothing about
+    whether either half is actually now under `_MAX_ATOM_MS`. a half can
+    still be well over 25s and need to be split again on its own internal
+    gaps (reproduced with a 4-word atom whose single largest gap splits it
+    into a 100ms atom and a 31.1s atom -- still way over the limit).
+    `split_long_atoms` now runs each atom through
+    `_split_atom_to_fixed_point`, a recursive split that re-checks every
+    resulting piece against `_MAX_ATOM_MS` and keeps splitting until every
+    piece is under the limit or hits the terminal no-valid-split-point case
+    (see below).
+
+    **(corrected 2026-09-06, post-review, round 2 -- later found to be
+    itself flawed and superseded, see round 3 below)** round 1's fix
+    introduced a separate problem: because `merge_short_atoms` runs
+    *before* `split_long_atoms` in the listed order, and `split_long_atoms`
+    could itself create a new sub-3-word fragment with no pause protection
+    (by splitting at whichever gap happened to be largest, with no regard
+    for what it would leave behind), a single top-to-bottom pass of the
+    whole pipeline could leave that fragment un-merged forever. the round 2
+    fix made `atomize_words` alternate `merge_short_atoms` and
+    `split_long_atoms` in a `while` loop at the pipeline level, re-running
+    each after the other changed anything, until one full round of both
+    produced no change, plus cycle detection (tracking every post-merge
+    state already produced; if a merge ever reproduced one, the loop
+    stopped and kept the merged, possibly-still-over-25s, form) to handle
+    adversarial atoms where split and merge would otherwise oscillate
+    forever.
+
+    **(corrected 2026-09-06, post-review, round 3 -- replaces round 2
+    entirely)** round 2's alternating-loop/cycle-detection fix was itself a
+    worse bug: the last-atom-short backward-merge (see below), when repeated
+    across fixed-point rounds, had no bound on how much it could consume.
+    concretely: a split-created unprotected fragment would get merged
+    backward by `merge_short_atoms`; if the *whole* atom (including
+    already-compliant content merged in from far earlier) got reproduced by
+    that merge, the round-2 cycle detector would settle on that merged
+    state -- meaning an atom could absorb arbitrarily much unrelated,
+    already-compliant preceding content into one giant blob, not just
+    "slightly over 25s" as originally believed. confirmed repro: a 100-word,
+    ~20s benign block immediately followed by an 8-word tail whose single
+    largest internal gap sat right before its last word (creating a 1-word
+    unprotected fragment if cut there) collapsed into one 25,690ms atom that
+    absorbed the entire benign block -- nearly 3x the number of words that
+    should ever have been touched by the tail's own split/merge resolution.
+
+    the actual root cause was narrower than round 2's fix addressed:
+    `split_long_atoms`'s split-point selection picked the single largest
+    gap with no awareness of the word-count/pause-protection rule, so it
+    could freely create an unprotected fragment and hand the problem off to
+    a *global* merge pass that had no way to know the fragment was scoped
+    to just that one split decision. the round 3 fix makes split-point
+    selection itself aware of the constraint (`_select_split_index`,
+    `_creates_unprotected_short_child`): candidate gaps are tried
+    largest-first, and a candidate is skipped -- not accepted and
+    patched up later -- if it would leave either resulting child under
+    `_MIN_ATOM_WORDS` words *and* the split gap itself is under
+    `_PAUSE_SPLIT_MS` (the same exception `merge_short_atoms` already
+    grants). `split_long_atoms` therefore never creates a new unprotected
+    short fragment in the first place, so there is nothing left for a merge
+    pass to clean up, no alternation between `merge_short_atoms` and
+    `split_long_atoms` is needed, and the round-2 cycle-detection machinery
+    (`seen_merged_states`, `_atoms_signature`, the `atomize_words`-level
+    `while` loop) has been removed entirely. `atomize_words` is back to a
+    single straight-line pass: `split_into_atoms -> merge_short_atoms ->
+    split_long_atoms -> compute_pauses -> _assign_ids`.
+
+    if *every* candidate gap in an atom would create an unprotected short
+    fragment (or there's no internal gap at all), `_select_split_index`
+    returns `None` and the atom is left as a single, local, well-scoped
+    exception to the 25s limit -- over the limit, yes, but strictly because
+    that atom's own content structure makes it truly unsplittable without
+    violating the word-count rule, never by absorbing any neighbouring
+    atom's content. this is a materially different (and much smaller)
+    exception than round 2's: it can only ever affect the one atom whose own
+    gaps are all disqualified, with a size bounded by whatever content
+    `split_into_atoms` originally grouped into that one atom -- it cannot
+    grow across merge/split rounds, and no unrelated neighbour is ever
+    touched. documented and tested explicitly (round 1's repro -- 5 words,
+    total span 25,100ms, every one of its 4 internal gaps under 700ms and
+    disqualified on word-count grounds -- now resolves directly via
+    `split_long_atoms` alone, no merge/cycle involved:
+    `test_atom_where_every_split_point_would_create_an_unprotected_fragment_is_left_unsplit`;
+    the round 3 100-word-benign-block-plus-tail repro is
+    `test_benign_atom_preceding_an_unsplittable_tail_is_not_absorbed_into_a_giant_merged_atom`,
+    both in `tests/unit/test_atomize.py`).
+
+    the last-atom-short backward-merge exception (see below) was
+    re-examined given this redesign and kept as-is: it's sound on its own
+    merits, independent of this bug -- the round 3 runaway was caused by
+    `split_long_atoms` handing merge an unprotected fragment it had no way
+    to scope correctly, not by the backward-merge rule itself. with
+    split-point selection now guaranteed to never create such a fragment,
+    the backward merge only ever fires on fragments `split_into_atoms`
+    produced directly from the original transcript, which is exactly the
+    case it was designed for.
+
+    order-wise, merge-short still runs *before* split-long (as listed):
+    merging first means a long atom created by merging fragments together
+    still gets its long-atom check in the same pass; splitting first then
+    merging would risk re-fusing a freshly split long atom back together if
+    either half were short, which would defeat the point of the split.
+    `compute_pauses` and final id assignment always run last, once, since
+    they depend on final neighbour relationships.
+  - sentence-final punctuation matching (`_ends_sentence`): a word ends a
+    sentence if, after stripping trailing closing quote/paren/bracket
+    characters (`"'"`)]}`, it ends in `.`, `?`, or `!`. this covers common
+    cases like `"Really?"` and `(fine.)` without building real sentence
+    boundary detection (e.g. no special-casing of abbreviations like "Mr."
+    or decimal numbers like "3.5" -- those will incorrectly end an atom).
+    good enough for a deterministic, no-llm first pass; a mis-split here
+    only produces a slightly-too-short atom, which `merge_short_atoms` may
+    then repair anyway if the fragment is under 3 words.
+  - last atom in the transcript is short (`merge_short_atoms`): the spec's
+    "merge shorter atoms into the following atom" rule has no following
+    atom for the very last one. chose to merge it backward into the
+    previous (already-finalized) atom instead of leaving it as an
+    under-length trailing atom. **(corrected 2026-09-06, post-review)**
+    this backward merge now *does* consult the same `>=700ms` pause
+    exception every forward merge respects: if the previous atom is
+    separated from the short last atom by a real pause, forcing them
+    together would be exactly the kind of unnatural fusion the exception
+    exists to prevent, regardless of which direction the merge runs. if the
+    pause is `>=700ms`, the short last atom is left as its own trailing
+    atom with fewer than 3 words -- that's fine, since the whole point of
+    the pause exception (spec bullet 3) is that a short-but-pause-protected
+    atom is allowed to stay short. documented and tested explicitly
+    (`test_last_atom_short_with_nothing_following_merges_backward` for the
+    merge case, `test_last_atom_short_separated_by_large_pause_stays_unmerged`
+    for the new pause-protected case).
+  - long atom with no internal pause (`split_long_atoms`): if every word in
+    an atom is back-to-back (e.g. a single very long word, or a run of
+    zero-gap words) there's no internal gap to split at. left as-is rather
+    than forcing an arbitrary mid-word or mid-atom cut with no principled
+    location -- documented and tested
+    (`test_long_atom_with_no_internal_pause_is_left_as_is`).
+  - `atoms.json` shape: a plain json array of `Atom` objects (via
+    `json.dumps([atom.model_dump() for atom in atoms], indent=2)`), matching
+    the spec's `Atom[]` (section 2.2) literally, rather than wrapping in an
+    envelope object -- no other stage's output needs an envelope, and there
+    is no cross-cutting metadata (page count, provider info, etc.) that
+    would justify one here, unlike `transcript.json`'s `Transcript` object
+    which already carries `language`/`provider`/`model` alongside its words.
+
 - 2026-09-06: `record_stat` (`clipper/util/log.py`) guards its read-modify-write of
   `stats.json` with an in-process `threading.Lock`, keyed by the file's resolved absolute path
   (a small dict of locks, itself guarded by a meta-lock for safe creation), rather than a

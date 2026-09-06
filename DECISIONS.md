@@ -32,3 +32,48 @@ reviewed at each phase boundary (spec section 15).
 - 2026-09-06: the example config file (`configs/podcast.yaml`, spec section 5/12) lives in a
   top-level `configs/` directory rather than inside the `clipper/` package, since it's a
   user-facing on-disk artifact passed via `--config`, not importable package code.
+
+- 2026-09-06: `sha256_llm_cache_key` (spec section 7) joins `model`, `prompt_version`, and
+  `input` with a NUL (`\x00`) separator before hashing, rather than the spec's literal
+  `sha256(model + prompt_version + input)` naive concatenation. naive concatenation lets
+  different inputs collide into the same cache key (e.g. `("ab", "c", "x")` and
+  `("a", "bc", "x")` both concatenate to `"abcx"`). NUL cannot appear in any of the three
+  components in practice, so the join is unambiguous. `clipper/util/hashing.py`.
+
+- 2026-09-06: `stats.json` and `log.jsonl` (`clipper/util/log.py`) are read/written as plain
+  `dict`/`list[dict]`, not pydantic models, unlike every other on-disk artifact (spec section
+  3's "everything on disk is one of these serialized"). both files are additive, free-form
+  key-value bags written incrementally by many independent call sites across every stage
+  (spec section 10); `stats.json`'s nested shape mixes heterogeneous value types (ints,
+  floats, strings, per-stage sub-dicts) that don't earn a fixed schema at this stage of the
+  build. can be revisited if a stricter shape is needed later.
+
+- 2026-09-06: `new_run_id` (spec section 2.3) uses UTC (`datetime.now(UTC)`) rather than
+  local time for the run id timestamp, so run ids are stable and comparable regardless of the
+  machine's timezone; the spec's example format doesn't specify which. same applies to
+  `log.jsonl`'s per-event `ts` field in `clipper/util/log.py`. this was a proactive choice, not
+  one enforced by tooling -- `pyproject.toml`'s `[tool.ruff]` section doesn't configure
+  `select`/`lint.select`, so ruff runs its default rule set (E4, E7, E9, F), which does not
+  include `DTZ005` (flake8-datetimez is opt-in).
+
+- 2026-09-06: `new_run_id` (spec section 2.3) has a known, accepted collision: two runs of the
+  same source file within the same wall-clock second produce an identical run_id (timestamp +
+  slug), silently reusing the run directory. low-probability for phase 1's manual, one-run-at-a-
+  time CLI usage; not worth solving (e.g. with a sub-second timestamp or a suffix counter) at
+  this stage.
+
+- 2026-09-06: `format_ms_as_mmss` (spec section 4.11) does not roll minutes over into an
+  `hh:mm:ss` format past 59 minutes -- e.g. `3661000` ms renders as `"61:01"`, not
+  `"1:01:01"`. the spec's examples are all under an hour, so this is undetermined by the spec;
+  kept simple since `mm:ss` is what section 4.11's `selected.md` output calls for.
+
+- 2026-09-06: `record_stat` (`clipper/util/log.py`) guards its read-modify-write of
+  `stats.json` with an in-process `threading.Lock`, keyed by the file's resolved absolute path
+  (a small dict of locks, itself guarded by a meta-lock for safe creation), rather than a
+  cross-process file lock (e.g. a `filelock`/`portalocker` dependency). `clipper run` is one
+  process per invocation, and the concurrency the spec calls for (section 7: up to 8 concurrent
+  judge-stage llm calls, each recording stats) comes from asyncio tasks within that process, not
+  separate OS processes -- so an in-process lock fully closes the lost-update race without
+  taking on a new dependency or cross-process lock-file lifecycle to manage. the write itself is
+  made atomic (write to a temp file in `stats.json`'s directory, then `os.replace()`) so a crash
+  mid-write can't leave `stats.json` truncated or corrupted.

@@ -86,6 +86,17 @@ def test_max_source_duration_at_60s_floor_is_accepted() -> None:
     assert cfg.max_source_duration_ms == 60_000
 
 
+@pytest.mark.parametrize("judge_cap", [0, -1])
+def test_judge_cap_below_one_is_rejected(judge_cap: int) -> None:
+    with pytest.raises(ValidationError, match="judge_cap"):
+        Config(judge_cap=judge_cap)
+
+
+def test_judge_cap_of_one_is_accepted() -> None:
+    cfg = Config(judge_cap=1)
+    assert cfg.judge_cap == 1
+
+
 def test_resolved_scoring_weights_returns_defaults_for_podcast() -> None:
     cfg = Config(content_type="podcast")
     assert cfg.resolved_scoring_weights() == ScoringWeights()

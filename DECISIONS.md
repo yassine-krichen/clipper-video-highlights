@@ -526,6 +526,68 @@ reviewed at each phase boundary (spec section 15).
   "judge failed") to apply on the same exception; `llm_pass` has no such fallback, so its
   contribution is simply omitted.
 
+- 2026-09-06: milestone m8 (`clipper/stages/prefilter.py`, `clipper/util/silence.py`, spec
+  section 4.6) judgment calls:
+  - output artifact: spec section 2.2's run directory layout lists `candidates.json` ->
+    (implicitly, prefilter) -> `judged.json`, with no intermediate filename named for the
+    prefilter stage itself, unlike every other stage boundary in that section. rather than
+    invent an unlisted `prefiltered.json`, `run_prefilter` treats prefilter as refining
+    `candidates.json` in place: it reads `candidates.json`, computes `pre_score` for every
+    candidate, drops the ones outside `judge_cap` (except always-kept `llm_pass` candidates),
+    and overwrites `candidates.json` with the reduced set. this matches the spec's own naming
+    literally (no new artifact appears between `candidates.json` and `judged.json`) and mirrors
+    `generate.py`'s own precedent of writing `candidates.json` once, at the end of its stage.
+    counter-argument acknowledged: spec section 2.2 doesn't just name the file, it describes it
+    as the "raw pool with generator provenance" -- overwriting it with the post-prefilter subset
+    arguably contradicts that description more directly than it satisfies the "no intermediate
+    artifact" argument in favor. this decision prioritizes the latter (literal artifact-naming
+    match, consistency with `generate.py`'s single-write precedent) over the former, and accepts
+    that `candidates.json` on disk stops matching its own spec-given "raw pool" description once
+    prefilter has run. the tradeoff: `candidates.json` is not a stable historical record of every
+    candidate ever proposed post-prefilter -- that population is recoverable only via
+    `log.jsonl`'s `prefiltered` event's `before`/`after`/`dropped` counts, and per-generator counts
+    already recorded by `generate.py`'s own stats, not from any file on disk. revisit specifically
+    when `clipper inspect` (spec section 5, out of scope for this milestone) is built: it's the
+    concrete future consumer that would actually need the full pre-prefilter pool on disk, and is
+    the point at which this tension between "raw pool" and "refined in place" stops being
+    theoretical.
+  - added `Config.judge_cap: int = 40` (spec: "keep top judge_cap (default 40)") -- did not
+    exist on `Config` before this milestone.
+  - `duration_fit` is implemented as a symmetric tent function over
+    `[cfg.min_duration_ms, cfg.max_duration_ms]`: `1 - abs(duration_ms - mid) / half_range`,
+    clamped to `[0, 1]`, where `mid`/`half_range` are the range's midpoint and half-width. spec's
+    "1 at the middle of the range, 0 at the edges" description maps onto this unambiguously; the
+    only real judgment call is confirming it's a tent (peaking at the middle), not a min=0/max=1
+    linear ramp -- the spec's own wording rules the ramp reading out.
+  - `silence_ratio` (spec's own section 4.6 note flags this as a real gap: the formula is phase-1
+    in-scope but real audio-energy silence detection is `features.json`, phase 2, not built yet)
+    is approximated as a TIMING-ONLY PROXY from data already available in `atoms.json`: for the
+    atoms spanned by a candidate (`atom_start`..`atom_end` inclusive), sum the internal
+    inter-atom pause gaps (`Atom.pause_before_ms` for every spanned atom except the first --
+    summing `pause_before_ms` for all-but-the-first counts each internal gap exactly once, since
+    atom `i`'s `pause_after_ms` and atom `i+1`'s `pause_before_ms` describe the same gap and
+    summing both would double count it) and divide by the span's total duration. pauses before
+    the first spanned atom or after the last are deliberately excluded -- they lead into/out of
+    the span, not within it. implemented as a standalone, reusable helper
+    (`clipper/util/silence.py`'s `compute_timing_silence_ratio`) rather than a private
+    `prefilter.py` function, specifically so the future M10 `refine.py` `silence` penalty (spec
+    section 4.9, which needs the same proxy) can import it directly instead of duplicating the
+    logic.
+  - `lexical_hit` is interpreted as a binary signal reusing information already on the candidate:
+    `1.0` if `"lexical"` is in `candidate.generators` (this candidate was proposed BY the lexical
+    hook-matching generator), else `0.0`. an alternative reading -- re-scanning the candidate's
+    spanned atom text against `hooks.yaml`'s patterns independently of which generator actually
+    proposed it -- was rejected as unnecessary duplication of `clipper/generators/lexical.py`'s
+    own pattern-matching logic for a signal the `generators` list already carries after M7's
+    identical-range merge unions generator provenance.
+  - cap enforcement (`_select_top_and_llm_pass`): sorts all candidates by `pre_score` descending,
+    takes the top `judge_cap`, then appends any `llm_pass` candidate that fell outside that cutoff
+    (spec: "always keep every llm_pass candidate even if that exceeds the cap") -- the returned
+    list can therefore exceed `judge_cap` in size. `run_prefilter` logs this via a
+    `cap_exceeded_by_llm_pass` boolean on the `prefiltered` event, alongside `before`/`after`/
+    `dropped` counts, and records `stats.json`'s `candidates.after_prefilter` key (matching the
+    naming spec section 10's own stats.json example uses).
+
 - 2026-09-06: M7 review fix -- `clipper/stages/generate.py`'s pipeline now runs g4 (`coverage`)
   against g1-g3's output AFTER it has passed `_snap_to_atom_boundaries` and
   `_within_duration_bounds` filtering (new `_validate_and_filter` helper), not before. previously

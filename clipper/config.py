@@ -102,6 +102,11 @@ class Config(BaseSettings):
     captions: bool = False
     reframe: Reframe = "none"
     scoring_weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS
+    # prefilter stage's cap on how many candidates advance to the (costly)
+    # judge stage (spec section 4.6: "keep top judge_cap (default 40)").
+    # `llm_pass` candidates are always kept regardless of this cap -- see
+    # `clipper/stages/prefilter.py`.
+    judge_cap: int = 40
 
     @field_validator("max_duration_ms")
     @classmethod
@@ -126,6 +131,19 @@ class Config(BaseSettings):
                 "60000ms (the fixed minimum source duration)"
             )
         return max_source_duration_ms
+
+    @field_validator("judge_cap")
+    @classmethod
+    def _validate_judge_cap_positive(cls, judge_cap: int) -> int:
+        # a judge_cap of 0 or negative is a degenerate/likely-misconfigured
+        # case: `llm_pass` candidates are always kept regardless (spec's
+        # override rule), but keeping zero non-llm_pass candidates is
+        # almost certainly not intended, and a negative value would
+        # silently hit Python's negative-slice semantics in
+        # `ranked[:judge_cap]` (prefilter.py) instead of failing loud.
+        if judge_cap < 1:
+            raise ValueError(f"judge_cap ({judge_cap}) must be at least 1")
+        return judge_cap
 
     @model_validator(mode="after")
     def _validate_resolved_scoring_weights(self) -> Config:

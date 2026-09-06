@@ -36,3 +36,6 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: real local model inference (e.g. faster-whisper) -- deselect with -m 'not slow'",
+]

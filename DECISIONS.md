@@ -102,6 +102,84 @@ reviewed at each phase boundary (spec section 15).
   per spec section 13's "never mock ffmpeg or ffprobe" rule, this is real subprocess I/O
   against real (if synthetic) media, exercising the actual rejection logic.
 
+- 2026-09-06: milestone m4 (transcribers, spec section 4.2) judgment calls:
+  - `chunk_wav` (`clipper/transcribers/groq.py`) uses ffmpeg subprocess calls to cut
+    fixed-size, overlapping wav slices to temp files -- consistent with the rest of the
+    codebase's approach to audio (`clipper/media/ffmpeg.py`), and avoids a second audio
+    i/o dependency (`wave` module would still need separate resampling/format handling
+    groq's endpoint expects). chunk `i`'s start offset is `i * (chunk_duration_ms -
+    overlap_ms)`, so consecutive chunks overlap by exactly `overlap_ms` regardless of how
+    many chunks the source needs; audio no longer than `chunk_duration_ms` skips chunking
+    entirely and is transcribed in a single call, per spec ("groq caps request size").
+  - `stitch_chunks` matches dropped overlap words purely on `(start_ms, end_ms)` within a
+    +/-100ms tolerance (spec is explicit: match on timing, not text) -- a word inside the
+    `[chunk_offset_ms, chunk_offset_ms + overlap_ms)` absolute-time zone is dropped only if
+    a word already emitted from the previous chunk's tail matches its timing within
+    tolerance; words in the zone with no timing match (e.g. the previous chunk's
+    transcription genuinely stopped a bit short of the true overlap boundary) are kept, not
+    dropped by zone membership alone.
+  - `env_prefix`-based `pydantic-settings` config (`Config`) is not extended to own
+    `FREELLM_BASE_URL`/`FREELLM_API_KEY`: those are read directly via `os.environ.get` in
+    `clipper/transcribers/groq.py`'s `_build_client`, raising a clear `RuntimeError` if
+    either is unset. they're infrastructure/secrets for the freellmapi proxy, not run
+    configuration a yaml file or `Config.from_yaml` should ever set -- keeping them out of
+    `Config` also means `cfg.model_dump()` (written into every run's `input.json`, spec
+    section 4.1) never risks including them. `clipper/llm/client.py` (a later milestone)
+    should read them the same way for consistency.
+  - GroqTranscriber -> FasterWhisperTranscriber fallback (`clipper/stages/transcribe.py`)
+    treats an error as "non-retryable" (spec section 4.2's exact fallback trigger) via a
+    substring heuristic on the exception message: missing/invalid freellmapi config or
+    credentials (`FREELLM_BASE_URL`/`FREELLM_API_KEY`, "authentication", "unauthorized",
+    "invalid_api_key", 401/403) or a bad model name (404/"model_not_found"). rate limits,
+    timeouts, and 5xx responses are deliberately excluded -- those are transient, and
+    silently swapping to a slower, lower-quality local model on a transient failure would
+    be a worse outcome than surfacing the error. this is a heuristic over message text, not
+    a typed exception hierarchy from the `openai` sdk, since freellmapi's proxying may not
+    preserve the sdk's normal exception subclasses faithfully.
+  - `faster-whisper` gpu/cpu model selection (`clipper/transcribers/faster_whisper.py`)
+    uses `ctranslate2.get_cuda_device_count()`, not `torch.cuda.is_available()` -- torch is
+    only a transitive dependency here (via `sentence-transformers`) and its installed cuda
+    build has no bearing on what ctranslate2 (faster-whisper's actual inference backend)
+    can use. this only reflects driver-level gpu presence, though: on this dev machine,
+    `get_cuda_device_count()` reports a gpu, but the cuda runtime it needs
+    (`cublas64_12.dll`) isn't loadable, and ctranslate2 only surfaces that as a
+    `RuntimeError` on first real inference, not at model-load time. `FasterWhisperTranscriber.transcribe`
+    catches that specific failure (message contains `cublas`/`cudnn`/`.dll`/`.so`) and
+    retries once on the cpu model (`small`) -- confirmed against a real run against
+    `tests/fixtures/sample_3min.mp4`'s audio on this machine.
+  - also observed on this dev machine: the `vad_filter=True` spec default (silero vad via
+    onnxruntime, bundled in `faster-whisper`) returns zero speech segments for real,
+    non-silent, plainly-transcribable audio -- confirmed independently of this codebase by
+    calling the vad model directly and inspecting raw speech probabilities (max ~0.33,
+    never crossing its 0.5 threshold), and by re-running the same audio through
+    `WhisperModel.transcribe` with `vad_filter=False`, which works normally. this looks like
+    an onnxruntime/silero-vad-onnx-asset environment incompatibility upstream of this
+    codebase (`faster-whisper==1.2.1`'s bundled `silero_vad_v6.onnx`), not a bug in
+    `FasterWhisperTranscriber`. rather than silently ship an empty transcript,
+    `transcribe()` retries once with `vad_filter=False` whenever the first
+    (spec-mandated) attempt returns zero words for non-empty audio -- whisper's decoder
+    still skips genuine silence on its own, just without vad's pre-filtering benefit. this
+    fallback was exercised and confirmed working end-to-end against the real fixture on
+    this machine (`tests/integration/test_faster_whisper_transcriber.py`, marked `slow`).
+  - added a `slow` pytest marker (`pyproject.toml`) for
+    `tests/integration/test_faster_whisper_transcriber.py`, since it loads a real local
+    whisper model (first run downloads it) and runs real cpu inference -- too heavy for a
+    fast default test loop. `uv run pytest -m "not slow"` deselects it; the milestone's
+    full suite (including this test) was still run and confirmed passing at least once.
+  - `chunk_wav`'s multi-chunk-splitting test (`tests/unit/test_chunk_wav.py`) uses a much
+    shorter `chunk_duration_ms=30_000` against the real `sample_3min.mp4` fixture (~144s)
+    rather than generating a synthetic long wav via ffmpeg `lavfi` -- the real fixture
+    already exists, is committed, and is short enough that a 30s chunk size forces several
+    real chunks without needing new fixture generation machinery, while still running real,
+    unmocked ffmpeg/ffprobe calls per spec section 13.
+
+- 2026-09-06: M4 review follow-up: `FREELLM_BASE_URL`/`FREELLM_API_KEY` (read via
+  `os.environ.get` in `clipper/transcribers/groq.py`'s `_build_client`) won't actually be
+  populated from a `.env` file until something calls `load_dotenv()` (or equivalent) in the
+  CLI entrypoint -- out of scope for M4, and deliberately not added here since `.env`
+  loading/CLI wiring belongs to the later CLI-wiring milestone (M15). flagging now so that
+  milestone doesn't forget it.
+
 - 2026-09-06: `record_stat` (`clipper/util/log.py`) guards its read-modify-write of
   `stats.json` with an in-process `threading.Lock`, keyed by the file's resolved absolute path
   (a small dict of locks, itself guarded by a meta-lock for safe creation), rather than a

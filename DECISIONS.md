@@ -67,6 +67,41 @@ reviewed at each phase boundary (spec section 15).
   `"1:01:01"`. the spec's examples are all under an hour, so this is undetermined by the spec;
   kept simple since `mm:ss` is what section 4.11's `selected.md` output calls for.
 
+- 2026-09-06: `run_probe` (`clipper/stages/probe.py`, spec section 4.1) takes `video_path:
+  Path` as a third parameter, deviating from the generic `run_<stage>(run_dir: Path, cfg:
+  Config) -> None` signature (spec section 4). probe is the pipeline's entry point -- nothing
+  upstream has written the source video's location into the run directory yet -- so the path
+  has to be supplied directly. every later stage keeps the generic two-arg signature.
+
+- 2026-09-06: added `Config.max_source_duration_ms` (default 4h in ms) for the probe stage's
+  configurable upper duration bound (spec section 4.1: "duration > 4h (configurable)"). named
+  distinctly from the existing `min_duration_ms`/`max_duration_ms`, which bound individual
+  *clip* length (spec section 2.1) -- reusing those names for the *source video's* duration
+  bound would have been ambiguous. the 60s lower bound is spec section 4.1's fixed literal, not
+  called out as configurable, so it's a plain constant (`clipper/stages/probe.py`'s
+  `_MIN_SOURCE_DURATION_MS`) rather than another config field.
+
+- 2026-09-06: `input.json` (spec section 2.2: "probe result + resolved config") is written as a
+  plain dict via `json.dump`, not a pydantic model, unlike most on-disk artifacts (spec section
+  3). its shape -- `probe` (ffprobe's raw, arbitrarily-shaped json), `sha256`, `config`
+  (`cfg.model_dump()`), `source_path`, `duration_ms` -- mostly wraps other tools' free-form
+  output rather than data this codebase defines the shape of, so it doesn't earn a fixed
+  pydantic schema, following the same precedent as `stats.json`/`log.jsonl` in
+  `clipper/util/log.py`.
+
+- 2026-09-06: `MediaProbeError` (`clipper/media/probe.py`) and `AudioExtractionError`
+  (`clipper/media/ffmpeg.py`) live next to the subprocess wrappers that raise them, while
+  `InvalidSourceError` (rejection based on the probe *result*: no audio stream, duration out of
+  bounds) lives in `clipper/stages/probe.py` since it's a stage-level business rule, not a
+  media-layer concern -- probing succeeding is orthogonal to the source being acceptable for
+  this pipeline.
+
+- 2026-09-06: reject-path tests for `run_probe` (`tests/integration/test_probe_stage.py`)
+  generate real, small synthetic media files with ffmpeg's `lavfi` test sources (`sine=...`,
+  `color=...`) at test time rather than mocking ffprobe/ffmpeg or committing tiny fixtures --
+  per spec section 13's "never mock ffmpeg or ffprobe" rule, this is real subprocess I/O
+  against real (if synthetic) media, exercising the actual rejection logic.
+
 - 2026-09-06: `record_stat` (`clipper/util/log.py`) guards its read-modify-write of
   `stats.json` with an in-process `threading.Lock`, keyed by the file's resolved absolute path
   (a small dict of locks, itself guarded by a meta-lock for safe creation), rather than a

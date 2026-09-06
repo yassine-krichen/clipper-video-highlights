@@ -76,6 +76,16 @@ def test_min_duration_equal_to_max_duration_is_rejected() -> None:
         Config(min_duration_ms=50000, max_duration_ms=50000)
 
 
+def test_max_source_duration_below_60s_floor_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="max_source_duration_ms"):
+        Config(max_source_duration_ms=59_999)
+
+
+def test_max_source_duration_at_60s_floor_is_accepted() -> None:
+    cfg = Config(max_source_duration_ms=60_000)
+    assert cfg.max_source_duration_ms == 60_000
+
+
 def test_resolved_scoring_weights_returns_defaults_for_podcast() -> None:
     cfg = Config(content_type="podcast")
     assert cfg.resolved_scoring_weights() == ScoringWeights()

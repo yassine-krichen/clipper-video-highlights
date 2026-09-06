@@ -21,6 +21,7 @@ Embedder = Literal["local", "api"]
 Reframe = Literal["none", "center", "face"]
 
 _WEIGHT_SUM_TOLERANCE = 1e-6
+_DEFAULT_MAX_SOURCE_DURATION_MS = 4 * 60 * 60 * 1000  # 4h (spec section 4.1)
 
 
 class ScoringWeights(BaseModel):
@@ -81,6 +82,12 @@ class Config(BaseSettings):
     clip_count: int = 5
     min_duration_ms: int = 25000
     max_duration_ms: int = 90000
+    # max source video duration for the probe stage (spec section 4.1:
+    # "reject if duration > 4h (configurable)"). distinct from
+    # min/max_duration_ms above, which bound individual clip length. the
+    # spec only calls the upper bound configurable -- the 60s minimum is a
+    # fixed constant, see clipper/stages/probe.py.
+    max_source_duration_ms: int = _DEFAULT_MAX_SOURCE_DURATION_MS
     content_type: ContentType = "podcast"
     language: str = "auto"
     keywords: list[str] = []
@@ -106,6 +113,19 @@ class Config(BaseSettings):
                 f"max_duration_ms ({max_duration_ms})"
             )
         return max_duration_ms
+
+    @field_validator("max_source_duration_ms")
+    @classmethod
+    def _validate_max_source_duration_floor(cls, max_source_duration_ms: int) -> int:
+        # the probe stage's 60s minimum (`clipper/stages/probe.py`'s
+        # `_MIN_SOURCE_DURATION_MS`) is a fixed floor, not configurable -- a
+        # max below it would make every source unconditionally rejected.
+        if max_source_duration_ms < 60_000:
+            raise ValueError(
+                f"max_source_duration_ms ({max_source_duration_ms}) must be at least "
+                "60000ms (the fixed minimum source duration)"
+            )
+        return max_source_duration_ms
 
     @model_validator(mode="after")
     def _validate_resolved_scoring_weights(self) -> Config:

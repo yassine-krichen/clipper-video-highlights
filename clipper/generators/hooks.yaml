@@ -1,0 +1,23 @@
+# hook phrase patterns for g3 `lexical` (spec section 4.5).
+#
+# top-level keys are language codes (matched against `Config.language`, see
+# `clipper/generators/lexical.py`'s `_load_hooks`); each language's value has
+# `phrases` (plain substrings, matched case-insensitively) and
+# `currency_pattern` (a regex, matched case-insensitively, for numbers with
+# currency -- a simple heuristic, not full nlp number detection: `$12`,
+# `12 dollars`, `12 USD`, etc.).
+#
+# phase 1 only ships English (`en`) patterns, per the milestone's scope.
+# other languages can be added as sibling top-level keys with the same
+# `phrases`/`currency_pattern` shape whenever diarization/multi-language
+# support (phase 4) needs them -- the structure already supports it, it's
+# just unpopulated for now.
+
+en:
+  phrases:
+    - "biggest mistake"
+    - "nobody tells you"
+    - "the truth is"
+    - "i lost"
+    - "here's what happened"
+  currency_pattern: '\$\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s?(?:dollars?|usd|euros?|pounds?)'

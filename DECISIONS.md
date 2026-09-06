@@ -441,6 +441,64 @@ reviewed at each phase boundary (spec section 15).
     interface changed, confirmed by the full existing `test_log.py`/
     `test_llm_cache.py` suites still passing unmodified.
 
+- 2026-09-06: milestone m7 (`clipper/generators/`, `clipper/stages/generate.py`, spec
+  section 4.5) judgment calls:
+  - `clipper/generators/base.py`'s interface: no single `Protocol` covers all four
+    generators, since three distinct signatures genuinely exist -- g2/g3 (`discourse`/
+    `lexical`) are pure `(atoms, cfg) -> list[Candidate]` (`DeterministicGenerator`
+    protocol); g1 (`llm_pass`) is `async (atoms, cfg, run_dir) -> list[Candidate]` (needs
+    `run_dir` for `complete_structured`'s cache/stats bookkeeping, and is async because
+    `complete_structured` is); g4 (`coverage`) is `(atoms, cfg, existing) -> list[Candidate]`,
+    since it runs last and depends on g1-g3's combined output. forcing one shared protocol
+    across all four would mean every generator carries parameters it ignores.
+  - `pre_score` (`Candidate.pre_score`, required field) is set to a flat `0.0` placeholder
+    by every generator (via `base.py`'s `build_candidate`), not just `llm_pass` -- the real
+    prefilter formula (spec section 4.6) needs post-merge generator membership and
+    `features.json`'s `silence_ratio` (phase 2, not built yet), neither of which any single
+    generator owns. computing a real `pre_score` is the M8 prefilter stage's job.
+  - `discourse` (g2) interprets "every contiguous atom run inside a region" as runs that
+    may start and end anywhere within the region, not only region-prefix runs -- otherwise a
+    region whose only duration-fitting content starts partway through it would silently
+    produce zero candidates. the "longest, shortest-valid, two intermediate" cap-at-4
+    selection sorts all valid runs by duration and picks the shortest, the longest, and the
+    runs at the 1/3 and 2/3 points of that sorted order as the two intermediates (the spec
+    doesn't say which two), de-duplicating if a short list makes any of the four picks
+    coincide.
+  - `lexical` (g3) does not itself enforce `max_duration_ms` on its min-duration variant, or
+    `min_duration_ms` on its max-duration variant -- each variant only respects the bound
+    it's named for (`min_duration_window_end`/`max_duration_window_end` in `base.py`); a
+    variant that ends up outside the other bound is left to `clipper/stages/generate.py`'s
+    normalization (drop-outside-duration-bounds) to filter, rather than duplicating that
+    filtering logic inside the generator. hooks.yaml is structured with top-level language
+    keys (only `en` populated in phase 1) so other languages can be added as sibling keys
+    later without a structural change.
+  - `coverage` (g4) walks atoms in order and, for each uncovered atom, emits a
+    `min_duration_ms` window starting there and immediately marks every atom inside that
+    window as covered before continuing -- this naturally coalesces adjacent uncovered atoms
+    into as few candidates as a gap needs (one per `min_duration_ms`-sized chunk), without a
+    separate "detect contiguous uncovered runs" pass. a trailing gap too short to ever reach
+    `min_duration_ms` (nothing left to extend into) is left uncovered rather than emitting a
+    window that normalization would drop anyway.
+  - `llm_pass` (g1) estimates token count as `len(text) / 4` (a commonly-cited rough
+    approximation for English text) purely to decide whether to trigger the spec's
+    45-minute/5-minute-overlap chunking -- not a real tokenizer dependency, and never used for
+    cost accounting (that uses the api response's real token counts). chunking splits atoms
+    by `start_ms` into time windows, mirroring `clipper/transcribers/groq.py`'s `chunk_wav`
+    in spirit; merging chunk proposals is a plain de-duplicating union keyed on
+    `(atom_start, atom_end)` since atom ids are already global/absolute (no timing-based
+    word-matching needed, unlike `stitch_chunks`'s audio case). proposals referencing an
+    unknown atom id or an inverted range are dropped defensively rather than crashing the
+    whole generate stage over one hallucinated proposal. the response model
+    (`GeneratorProposal`/`GeneratorOutput`) lives in `llm_pass.py`, not `types.py`, per the
+    phase-1 plan's decision that llm-response-shape models belong next to their caller.
+  - `clipper/stages/generate.py`'s "snap to atom boundaries" step is a validation pass, not a
+    geometric snap: every generator already builds candidates directly from atom objects, so
+    nothing is ever off-boundary by construction. the step instead re-derives
+    `start_ms`/`end_ms` from the atoms `atom_start`/`atom_end` reference and drops the
+    candidate if that range doesn't resolve to real, correctly-ordered atoms -- catching a
+    bug in one generator rather than performing a real snap operation no generator should
+    ever need.
+
 - 2026-09-06: `record_stat` (`clipper/util/log.py`) guards its read-modify-write of
   `stats.json` with an in-process `threading.Lock`, keyed by the file's resolved absolute path
   (a small dict of locks, itself guarded by a meta-lock for safe creation), rather than a
@@ -451,3 +509,36 @@ reviewed at each phase boundary (spec section 15).
   taking on a new dependency or cross-process lock-file lifecycle to manage. the write itself is
   made atomic (write to a temp file in `stats.json`'s directory, then `os.replace()`) so a crash
   mid-write can't leave `stats.json` truncated or corrupted.
+
+- 2026-09-06: M7 review fix -- `llm_pass.py` (g1) now catches `LLMSchemaError` (raised by
+  `complete_structured`, M6, once its own retries are exhausted) and `openai.OpenAIError` (the
+  SDK's common base for connection errors, timeouts, rate limits, and api status errors) around
+  each chunk's call, rather than letting either propagate. per spec section 1 ("invalid llm
+  output never crashes a run"), a bad/unreachable response from g1's llm call must degrade
+  gracefully, not take down the whole `generate` stage -- g2-g4 are fully deterministic and have
+  nothing to do with g1's llm call failing. `OpenAIError` is caught for the same reason as
+  `LLMSchemaError`: a network blip is exactly as recoverable, from this generator's point of
+  view, as a schema failure. on catch, the failing chunk contributes zero candidates (logged via
+  `append_event("generate", "llm_pass_failed", ...)`) while any OTHER chunks that succeeded still
+  contribute their candidates -- the more resilient choice, since one bad chunk out of several
+  says nothing about the others. this is a different failure-handling responsibility than the
+  future judge stage's: judge has a judge-specific fallback (dimensions=5, standalone_level=2,
+  "judge failed") to apply on the same exception; `llm_pass` has no such fallback, so its
+  contribution is simply omitted.
+
+- 2026-09-06: M7 review fix -- `clipper/stages/generate.py`'s pipeline now runs g4 (`coverage`)
+  against g1-g3's output AFTER it has passed `_snap_to_atom_boundaries` and
+  `_within_duration_bounds` filtering (new `_validate_and_filter` helper), not before. previously
+  coverage ran against the RAW g1-g3 output, so an atom range could be considered "covered" by a
+  candidate that then gets dropped by the duration-bounds filter that runs after coverage --
+  leaving that atom range with zero surviving candidates in the final `candidates.json`, exactly
+  the gap g4 exists to close ("every part of the video is at least considered"). `llm_pass`'s raw
+  proposals have no duration-bound enforcement at all, and `lexical`'s variants only enforce one
+  bound each, so this wasn't a theoretical edge case. coverage's own output is now run through
+  the same `_validate_and_filter` helper afterward, for the same defensive reasons the rest of
+  the pipeline is validated. also: `_merge_identical_ranges`'s "first-seen-wins" behavior (which
+  candidate's `id`/`generator_hint`/`pre_score` survive a merge) is incidental to the list
+  concatenation order callers happen to pass in (`llm_pass`, then `discourse`, then `lexical`,
+  then `coverage`) -- it was never a deliberate generator-priority policy, just how dict
+  insertion order works out. documented in code near the merge logic so a future reader doesn't
+  mistake it for intentional prioritization.

@@ -1,0 +1,25 @@
+version: "3"
+
+# CLI app (typer entry point `clipper`), no port. Pass arguments after --,
+# e.g. task clipper:run -- --help
+
+tasks:
+  help:
+    desc: List all available tasks
+    cmds:
+      - task --list
+
+  install:
+    desc: Install project dependencies (uv sync, includes dev group)
+    cmds:
+      - uv sync
+
+  run:
+    desc: Run the clipper CLI, args after -- (e.g. -- --help)
+    cmds:
+      - uv run clipper {{.CLI_ARGS}}
+
+  test:
+    desc: Run the test suite (pytest; slow model tests included - add -- -m "not slow" to skip)
+    cmds:
+      - uv run pytest {{.CLI_ARGS}}

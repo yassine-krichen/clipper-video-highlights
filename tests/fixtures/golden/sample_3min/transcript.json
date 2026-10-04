@@ -1,0 +1,912 @@
+{
+  "language": "English",
+  "duration_ms": 144010,
+  "words": [
+    {
+      "text": "Woo!",
+      "start_ms": 0,
+      "end_ms": 2000,
+      "confidence": null
+    },
+    {
+      "text": "OK,",
+      "start_ms": 2000,
+      "end_ms": 2385,
+      "confidence": null
+    },
+    {
+      "text": "Los",
+      "start_ms": 2385,
+      "end_ms": 2769,
+      "confidence": null
+    },
+    {
+      "text": "Angeles,",
+      "start_ms": 2769,
+      "end_ms": 3795,
+      "confidence": null
+    },
+    {
+      "text": "are",
+      "start_ms": 3795,
+      "end_ms": 4179,
+      "confidence": null
+    },
+    {
+      "text": "we",
+      "start_ms": 4179,
+      "end_ms": 4436,
+      "confidence": null
+    },
+    {
+      "text": "ready",
+      "start_ms": 4436,
+      "end_ms": 5077,
+      "confidence": null
+    },
+    {
+      "text": "to",
+      "start_ms": 5077,
+      "end_ms": 5333,
+      "confidence": null
+    },
+    {
+      "text": "end",
+      "start_ms": 5333,
+      "end_ms": 5718,
+      "confidence": null
+    },
+    {
+      "text": "this",
+      "start_ms": 5718,
+      "end_ms": 6231,
+      "confidence": null
+    },
+    {
+      "text": "thing?",
+      "start_ms": 6231,
+      "end_ms": 7000,
+      "confidence": null
+    },
+    {
+      "text": "Yeah!",
+      "start_ms": 7000,
+      "end_ms": 8000,
+      "confidence": null
+    },
+    {
+      "text": "When",
+      "start_ms": 8000,
+      "end_ms": 8377,
+      "confidence": null
+    },
+    {
+      "text": "that",
+      "start_ms": 8377,
+      "end_ms": 8755,
+      "confidence": null
+    },
+    {
+      "text": "timer",
+      "start_ms": 8755,
+      "end_ms": 9226,
+      "confidence": null
+    },
+    {
+      "text": "hits",
+      "start_ms": 9226,
+      "end_ms": 9604,
+      "confidence": null
+    },
+    {
+      "text": "zero,",
+      "start_ms": 9604,
+      "end_ms": 10075,
+      "confidence": null
+    },
+    {
+      "text": "a",
+      "start_ms": 10075,
+      "end_ms": 10170,
+      "confidence": null
+    },
+    {
+      "text": "tank",
+      "start_ms": 10170,
+      "end_ms": 10547,
+      "confidence": null
+    },
+    {
+      "text": "full",
+      "start_ms": 10547,
+      "end_ms": 10925,
+      "confidence": null
+    },
+    {
+      "text": "of",
+      "start_ms": 10925,
+      "end_ms": 11113,
+      "confidence": null
+    },
+    {
+      "text": "flesh-eating",
+      "start_ms": 11113,
+      "end_ms": 12245,
+      "confidence": null
+    },
+    {
+      "text": "piranhas",
+      "start_ms": 12245,
+      "end_ms": 13000,
+      "confidence": null
+    },
+    {
+      "text": "will",
+      "start_ms": 13000,
+      "end_ms": 13444,
+      "confidence": null
+    },
+    {
+      "text": "fall",
+      "start_ms": 13444,
+      "end_ms": 13889,
+      "confidence": null
+    },
+    {
+      "text": "from",
+      "start_ms": 13889,
+      "end_ms": 14333,
+      "confidence": null
+    },
+    {
+      "text": "above.",
+      "start_ms": 14333,
+      "end_ms": 15000,
+      "confidence": null
+    },
+    {
+      "text": "A",
+      "start_ms": 15000,
+      "end_ms": 15083,
+      "confidence": null
+    },
+    {
+      "text": "lady",
+      "start_ms": 15083,
+      "end_ms": 15417,
+      "confidence": null
+    },
+    {
+      "text": "has",
+      "start_ms": 15417,
+      "end_ms": 15667,
+      "confidence": null
+    },
+    {
+      "text": "to",
+      "start_ms": 15667,
+      "end_ms": 15833,
+      "confidence": null
+    },
+    {
+      "text": "have",
+      "start_ms": 15833,
+      "end_ms": 16167,
+      "confidence": null
+    },
+    {
+      "text": "handcuffs,",
+      "start_ms": 16167,
+      "end_ms": 17000,
+      "confidence": null
+    },
+    {
+      "text": "right,",
+      "start_ms": 17000,
+      "end_ms": 17500,
+      "confidence": null
+    },
+    {
+      "text": "girls?",
+      "start_ms": 17500,
+      "end_ms": 18000,
+      "confidence": null
+    },
+    {
+      "text": "One,",
+      "start_ms": 18000,
+      "end_ms": 18857,
+      "confidence": null
+    },
+    {
+      "text": "two,",
+      "start_ms": 18857,
+      "end_ms": 19714,
+      "confidence": null
+    },
+    {
+      "text": "three!",
+      "start_ms": 19714,
+      "end_ms": 21000,
+      "confidence": null
+    },
+    {
+      "text": "Woo!",
+      "start_ms": 21000,
+      "end_ms": 23000,
+      "confidence": null
+    },
+    {
+      "text": "Whoa!",
+      "start_ms": 23000,
+      "end_ms": 25000,
+      "confidence": null
+    },
+    {
+      "text": "Get",
+      "start_ms": 30000,
+      "end_ms": 42849,
+      "confidence": null
+    },
+    {
+      "text": "out!",
+      "start_ms": 42849,
+      "end_ms": 59980,
+      "confidence": null
+    },
+    {
+      "text": "Help!",
+      "start_ms": 60000,
+      "end_ms": 62000,
+      "confidence": null
+    },
+    {
+      "text": "Get",
+      "start_ms": 62000,
+      "end_ms": 62250,
+      "confidence": null
+    },
+    {
+      "text": "up,",
+      "start_ms": 62250,
+      "end_ms": 62500,
+      "confidence": null
+    },
+    {
+      "text": "buddy!",
+      "start_ms": 62500,
+      "end_ms": 63000,
+      "confidence": null
+    },
+    {
+      "text": "Move!",
+      "start_ms": 63000,
+      "end_ms": 64000,
+      "confidence": null
+    },
+    {
+      "text": "Move!",
+      "start_ms": 64000,
+      "end_ms": 65000,
+      "confidence": null
+    },
+    {
+      "text": "Right",
+      "start_ms": 65000,
+      "end_ms": 65500,
+      "confidence": null
+    },
+    {
+      "text": "away!",
+      "start_ms": 65500,
+      "end_ms": 66000,
+      "confidence": null
+    },
+    {
+      "text": "Move!",
+      "start_ms": 66000,
+      "end_ms": 67000,
+      "confidence": null
+    },
+    {
+      "text": "Move",
+      "start_ms": 67000,
+      "end_ms": 70156,
+      "confidence": null
+    },
+    {
+      "text": "Move",
+      "start_ms": 70156,
+      "end_ms": 73313,
+      "confidence": null
+    },
+    {
+      "text": "Move",
+      "start_ms": 73313,
+      "end_ms": 76469,
+      "confidence": null
+    },
+    {
+      "text": "Move",
+      "start_ms": 76469,
+      "end_ms": 79625,
+      "confidence": null
+    },
+    {
+      "text": "Move",
+      "start_ms": 79625,
+      "end_ms": 82782,
+      "confidence": null
+    },
+    {
+      "text": "Move",
+      "start_ms": 82782,
+      "end_ms": 85938,
+      "confidence": null
+    },
+    {
+      "text": "Move",
+      "start_ms": 85938,
+      "end_ms": 89094,
+      "confidence": null
+    },
+    {
+      "text": "Move",
+      "start_ms": 89094,
+      "end_ms": 92251,
+      "confidence": null
+    },
+    {
+      "text": "I",
+      "start_ms": 92251,
+      "end_ms": 93040,
+      "confidence": null
+    },
+    {
+      "text": "sorry",
+      "start_ms": 93040,
+      "end_ms": 96985,
+      "confidence": null
+    },
+    {
+      "text": "Come",
+      "start_ms": 97005,
+      "end_ms": 98583,
+      "confidence": null
+    },
+    {
+      "text": "on,",
+      "start_ms": 98583,
+      "end_ms": 99767,
+      "confidence": null
+    },
+    {
+      "text": "this",
+      "start_ms": 99767,
+      "end_ms": 101345,
+      "confidence": null
+    },
+    {
+      "text": "is",
+      "start_ms": 101345,
+      "end_ms": 102134,
+      "confidence": null
+    },
+    {
+      "text": "bullshit!",
+      "start_ms": 102134,
+      "end_ms": 105685,
+      "confidence": null
+    },
+    {
+      "text": "Whoever",
+      "start_ms": 106145,
+      "end_ms": 106709,
+      "confidence": null
+    },
+    {
+      "text": "thought",
+      "start_ms": 106709,
+      "end_ms": 107273,
+      "confidence": null
+    },
+    {
+      "text": "of",
+      "start_ms": 107273,
+      "end_ms": 107434,
+      "confidence": null
+    },
+    {
+      "text": "this",
+      "start_ms": 107434,
+      "end_ms": 107757,
+      "confidence": null
+    },
+    {
+      "text": "is",
+      "start_ms": 107757,
+      "end_ms": 107918,
+      "confidence": null
+    },
+    {
+      "text": "a",
+      "start_ms": 107918,
+      "end_ms": 107999,
+      "confidence": null
+    },
+    {
+      "text": "sick",
+      "start_ms": 107999,
+      "end_ms": 108321,
+      "confidence": null
+    },
+    {
+      "text": "sadist!",
+      "start_ms": 108321,
+      "end_ms": 108885,
+      "confidence": null
+    },
+    {
+      "text": "Transcription",
+      "start_ms": 127005,
+      "end_ms": 135161,
+      "confidence": null
+    },
+    {
+      "text": "by",
+      "start_ms": 135161,
+      "end_ms": 136416,
+      "confidence": null
+    },
+    {
+      "text": "CastingWords",
+      "start_ms": 136416,
+      "end_ms": 143945,
+      "confidence": null
+    }
+  ],
+  "segments": [
+    {
+      "id": 0,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 2.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 0.0,
+      "temperature": 0.0,
+      "text": " Woo!",
+      "tokens": [
+        50365,
+        10468,
+        0,
+        50465
+      ]
+    },
+    {
+      "id": 1,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 7.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 2.0,
+      "temperature": 0.0,
+      "text": " OK, Los Angeles, are we ready to end this thing?",
+      "tokens": [
+        50465,
+        2264,
+        11,
+        7632,
+        12292,
+        11,
+        366,
+        321,
+        1919,
+        281,
+        917,
+        341,
+        551,
+        30,
+        50715
+      ]
+    },
+    {
+      "id": 2,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 8.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 7.0,
+      "temperature": 0.0,
+      "text": " Yeah!",
+      "tokens": [
+        50715,
+        865,
+        0,
+        50765
+      ]
+    },
+    {
+      "id": 3,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 13.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 8.0,
+      "temperature": 0.0,
+      "text": " When that timer hits zero, a tank full of flesh-eating piranhas",
+      "tokens": [
+        50765,
+        1133,
+        300,
+        19247,
+        8664,
+        4018,
+        11,
+        257,
+        5466,
+        1577,
+        295,
+        12497,
+        12,
+        68,
+        990,
+        13528,
+        282,
+        12438,
+        51015
+      ]
+    },
+    {
+      "id": 4,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 15.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 13.0,
+      "temperature": 0.0,
+      "text": " will fall from above.",
+      "tokens": [
+        51015,
+        486,
+        2100,
+        490,
+        3673,
+        13,
+        51115
+      ]
+    },
+    {
+      "id": 5,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 18.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 15.0,
+      "temperature": 0.0,
+      "text": " A lady has to have handcuffs, right, girls?",
+      "tokens": [
+        51115,
+        316,
+        7262,
+        575,
+        281,
+        362,
+        46175,
+        28296,
+        11,
+        558,
+        11,
+        4519,
+        30,
+        51265
+      ]
+    },
+    {
+      "id": 6,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 21.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 18.0,
+      "temperature": 0.0,
+      "text": " One, two, three!",
+      "tokens": [
+        51265,
+        1485,
+        11,
+        732,
+        11,
+        1045,
+        0,
+        51415
+      ]
+    },
+    {
+      "id": 7,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 23.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 21.0,
+      "temperature": 0.0,
+      "text": " Woo!",
+      "tokens": [
+        51415,
+        10468,
+        0,
+        51515
+      ]
+    },
+    {
+      "id": 8,
+      "avg_logprob": -0.27635604,
+      "compression_ratio": 1.3374233,
+      "end": 25.0,
+      "no_speech_prob": 0.0,
+      "seek": 0,
+      "start": 23.0,
+      "temperature": 0.0,
+      "text": " Whoa!",
+      "tokens": [
+        51515,
+        7521,
+        0,
+        51615
+      ]
+    },
+    {
+      "id": 9,
+      "avg_logprob": -1.2899513,
+      "compression_ratio": 0.5294118,
+      "end": 59.98,
+      "no_speech_prob": 0.0,
+      "seek": 3000,
+      "start": 30.0,
+      "temperature": 0.0,
+      "text": " Get out!",
+      "tokens": [
+        50365,
+        3240,
+        484,
+        0,
+        51864
+      ]
+    },
+    {
+      "id": 10,
+      "avg_logprob": -0.4348143,
+      "compression_ratio": 2.0625,
+      "end": 62.0,
+      "no_speech_prob": 0.0,
+      "seek": 6000,
+      "start": 60.0,
+      "temperature": 0.0,
+      "text": " Help!",
+      "tokens": [
+        50365,
+        10773,
+        0,
+        50465
+      ]
+    },
+    {
+      "id": 11,
+      "avg_logprob": -0.4348143,
+      "compression_ratio": 2.0625,
+      "end": 63.0,
+      "no_speech_prob": 0.0,
+      "seek": 6000,
+      "start": 62.0,
+      "temperature": 0.0,
+      "text": " Get up, buddy!",
+      "tokens": [
+        50465,
+        3240,
+        493,
+        11,
+        10340,
+        0,
+        50515
+      ]
+    },
+    {
+      "id": 12,
+      "avg_logprob": -0.4348143,
+      "compression_ratio": 2.0625,
+      "end": 64.0,
+      "no_speech_prob": 0.0,
+      "seek": 6000,
+      "start": 63.0,
+      "temperature": 0.0,
+      "text": " Move!",
+      "tokens": [
+        50515,
+        10475,
+        0,
+        50565
+      ]
+    },
+    {
+      "id": 13,
+      "avg_logprob": -0.4348143,
+      "compression_ratio": 2.0625,
+      "end": 65.0,
+      "no_speech_prob": 0.0,
+      "seek": 6000,
+      "start": 64.0,
+      "temperature": 0.0,
+      "text": " Move!",
+      "tokens": [
+        50565,
+        10475,
+        0,
+        50615
+      ]
+    },
+    {
+      "id": 14,
+      "avg_logprob": -0.4348143,
+      "compression_ratio": 2.0625,
+      "end": 66.0,
+      "no_speech_prob": 0.0,
+      "seek": 6000,
+      "start": 65.0,
+      "temperature": 0.0,
+      "text": " Right away!",
+      "tokens": [
+        50615,
+        1779,
+        1314,
+        0,
+        50665
+      ]
+    },
+    {
+      "id": 15,
+      "avg_logprob": -0.4348143,
+      "compression_ratio": 2.0625,
+      "end": 67.0,
+      "no_speech_prob": 0.0,
+      "seek": 6000,
+      "start": 66.0,
+      "temperature": 0.0,
+      "text": " Move!",
+      "tokens": [
+        50665,
+        10475,
+        0,
+        50715
+      ]
+    },
+    {
+      "id": 16,
+      "avg_logprob": -1.1407168,
+      "compression_ratio": 0.57894737,
+      "end": 96.985,
+      "no_speech_prob": 0.0,
+      "seek": 67,
+      "start": 67.0,
+      "temperature": 0.0,
+      "text": " Move Move Move Move Move Move Move Move I sorry",
+      "tokens": [
+        50715,
+        10475,
+        0,
+        50765,
+        50765,
+        10475,
+        0,
+        50815,
+        50815,
+        10475,
+        0,
+        50865,
+        50865,
+        10475,
+        0,
+        50915,
+        50915,
+        10475,
+        0,
+        50965,
+        50965,
+        10475,
+        0,
+        51015,
+        51015,
+        10475,
+        0,
+        51115,
+        51115,
+        10475,
+        0,
+        51215,
+        50365,
+        286,
+        478,
+        2597,
+        13,
+        51864
+      ]
+    },
+    {
+      "id": 17,
+      "avg_logprob": -0.24279095,
+      "compression_ratio": 1.0298507,
+      "end": 105.685,
+      "no_speech_prob": 0.0,
+      "seek": 3067,
+      "start": 97.005,
+      "temperature": 0.0,
+      "text": " Come on, this is bullshit!",
+      "tokens": [
+        50365,
+        2492,
+        322,
+        11,
+        341,
+        307,
+        22676,
+        0,
+        50799
+      ]
+    },
+    {
+      "id": 18,
+      "avg_logprob": -0.24279095,
+      "compression_ratio": 1.0298507,
+      "end": 108.884995,
+      "no_speech_prob": 0.0,
+      "seek": 3067,
+      "start": 106.145,
+      "temperature": 0.0,
+      "text": " Whoever thought of this is a sick sadist!",
+      "tokens": [
+        50822,
+        24743,
+        1194,
+        295,
+        341,
+        307,
+        257,
+        4998,
+        4227,
+        468,
+        0,
+        50959
+      ]
+    },
+    {
+      "id": 19,
+      "avg_logprob": -0.43099517,
+      "compression_ratio": 0.7894737,
+      "end": 143.945,
+      "no_speech_prob": 0.0,
+      "seek": 6067,
+      "start": 127.005,
+      "temperature": 0.0,
+      "text": " Transcription by CastingWords",
+      "tokens": [
+        50365,
+        6531,
+        12432,
+        538,
+        11019,
+        278,
+        54,
+        5703,
+        51212
+      ]
+    }
+  ],
+  "provider": "freellm/groq",
+  "model": "whisper-large-v3-turbo"
+}

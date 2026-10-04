@@ -671,3 +671,47 @@ reviewed at each phase boundary (spec section 15).
     atoms are chronologically ordered and ids are contiguous, therefore every subsequent) atom
     whose distance exceeds the window is excluded and the walk stops there. tested explicitly at
     the exact boundary and one millisecond past it in both directions.
+
+- 2026-10-04: milestones m10-m14, cli and eval (finishing phase 1) judgment calls:
+  - **refine**: the judge's suggested range is clamped to at most 2 atoms outside the candidate
+    (spec 4.7 says so but the model is not trusted); an inverted suggestion falls back to the
+    candidate's own range. duration fitting loops with an iteration cap because a grow step can
+    overshoot and the next shrink step undo it. "dependent word" openers are so/because/and/but/
+    or/then plus the phrase "that's why"; a bare "that's" is excluded so "that's a great story"
+    is not penalised. `RefinedCandidate.score` is recomputed with the real boundary/silence
+    penalties through `compute_score(..., penalties=)` (the contract from the m9 entry).
+  - **gate/dedupe rejects** are written to `rejected.json` as `{candidate_id, stage, reason}`
+    (gate writes it, dedupe replaces only its own entries). no such file is in spec 2.2; it is
+    what lets `clipper inspect` show every fate. `gated.json` and `deduped.json` are likewise
+    new intermediate files. `deduped.json` carries the embeddings select needs.
+  - **dedupe** visits candidates best score first in both passes. a semantic loser's score is
+    recomputed with `redundancy = 25 * cosine` (same weight as select's diversity term) and
+    reported in the reject reason only; the loser is not kept.
+  - **select** proximity is measured as the gap between intervals (0 if they overlap), 1.0 up to
+    120s, linear to 0.0 at 600s.
+  - **inspect** can only list candidates that reached the judge: prefilter overwrites
+    `candidates.json` in place (m8), so earlier-pruned candidates are counted in stats but not
+    listed. same reason `eval`'s `recall_pool` is measured on the judged pool, which is a
+    stricter bar than the spec's pre-judge pool.
+  - **judge response schema**: `dimensions` is a named-field `JudgeDimensions` model, not
+    `dict[str, int]`. a dict has no `properties`, strict structured output collapses it to `{}`,
+    and the first live run had every judge call fail validation and fall back to the flat 38.0
+    score. unit-tested on the generated schema.
+  - **registry**: aliases re-pointed after live calls (gemini-flash -> gemini-3.1-flash-lite,
+    gemini-pro -> gemini-3-flash-preview, groq-llama -> llama-3.3-70b-fp8-fast). the proxy's
+    `/models` list is unreliable (listed models that 404 or rate-limit). `claude-sonnet` 404s and
+    is left as is. these are not stable; see the registry docstring.
+  - **word timings from segments**: the proxy returned `segments` but no `words` for groq
+    whisper, which yielded an empty transcript and a silent zero-clip run. when `words` is empty,
+    word times are interpolated inside each segment by character share (`_words_from_segments`).
+    cut edges are then segment-precise at best, not word-precise. the transcribe stage now
+    raises on a transcript with no words instead of continuing.
+  - **llm client** now closes its AsyncOpenAI client after each call; unclosed, every run ended
+    with an "event loop is closed" traceback from `asyncio.run` teardown.
+  - **cli**: `.env` is loaded from the working directory (python-dotenv, already a transitive
+    dependency of pydantic-settings). `clipper stage` reuses the config saved in `input.json`
+    unless `--config` is given. `render` is not registered (phase 2). `clipper eval` skips
+    transcription and runs atomize..select from a cached `transcript.json`.
+  - **first live run** (sample_3min.mp4, mostly crowd noise, 77 words): 1 clip selected, llm cost
+    about $0.001. some judge calls still fell back (flat 38.0 scores) because of upstream
+    flakiness, which the stage handles as designed.

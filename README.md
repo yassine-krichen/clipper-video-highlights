@@ -11,11 +11,11 @@
   ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
   ![uv](https://img.shields.io/badge/deps-uv-6340ac)
   ![Pydantic](https://img.shields.io/badge/Pydantic-v2-e92063?logo=pydantic)
-  ![Status](https://img.shields.io/badge/status-spec%20%2F%20pre--implementation-yellow)
+  ![Status](https://img.shields.io/badge/status-phase%201%20implemented-green)
   ![License](https://img.shields.io/badge/license-MIT-blue)
 </div>
 
-> **Status:** this repository currently holds the implementation spec ([`clipper-spec.md`](./clipper-spec.md)) only. No code has been written yet. This README describes the system as specified — phase 1 ("done when" criteria in the spec) is the first implementation milestone.
+> **Status:** phase 1 (extraction engine, CLI only) is implemented and ran end to end on `tests/fixtures/sample_3min.mp4` against the live LLM proxy. Still open from the phase 1 "done when": a real golden set (5 hand-annotated videos) to measure hit@5 / recall_pool / trap_rate, and a 60-minute cost check. The system is described below as specified in [`clipper-spec.md`](./clipper-spec.md).
 
 ## The problem
 
@@ -97,11 +97,11 @@ clipper/
   pyproject.toml            uv-managed, python 3.12
   CLAUDE.md                 working rules, kept in sync with clipper-spec.md
   clipper/
-    cli.py  config.py  types.py
+    cli.py  config.py  types.py  pipeline.py  report.py
     llm/            client.py cache.py registry.py
     prompts/        generator_v1.md judge_v1.md
     stages/         probe.py transcribe.py atomize.py generate.py
-                     prefilter.py judge.py refine.py gate.py dedupe.py select.py render.py
+                     prefilter.py judge.py refine.py gate.py dedupe.py select.py   (render.py: phase 2)
     generators/     llm_pass.py discourse.py lexical.py coverage.py query.py
     transcribers/   groq.py faster_whisper.py
     embed/          local.py api.py
@@ -115,20 +115,26 @@ clipper/
 
 Full stage-by-stage contract, data schemas, scoring formula, and phase boundaries are in [`clipper-spec.md`](./clipper-spec.md).
 
-## Getting started (planned — phase 1)
-
-Not yet runnable. This is the interface the phase 1 "done when" criteria target:
+## Getting started
 
 ```bash
 uv sync
-cp .env.example .env   # groq / gemini api keys
+cp .env.example .env   # FREELLM_BASE_URL + FREELLM_API_KEY: the openai-compatible proxy every LLM and transcription call goes through
 
-uv run clipper run tests/fixtures/sample_3min.mp4 --out runs/demo/
-uv run clipper inspect runs/demo/     # every candidate, its fate, and cost
+uv run clipper run tests/fixtures/sample_3min.mp4 --out runs/demo/   # prints selected.md
+uv run clipper inspect runs/demo/     # per-stage counts, every candidate and its fate, cost
+uv run clipper cost runs/demo/
+uv run clipper stage judge runs/demo/ # re-run one stage from its files (LLM calls are cached)
 uv run clipper eval tests/fixtures/golden/ --config configs/podcast.yaml
 ```
 
-Phase 1 done-when bar: a valid manifest from `sample_3min.mp4`, `clipper eval` printing metrics across 5 golden videos, passing unit tests for atomize/prefilter/refine/dedupe/select, and total LLM cost under $0.50 for a 60-minute source.
+`--stop-after <stage>` halts a run early. With `transcriber: faster_whisper` in the config, transcription runs locally and needs no key. The first dedupe run downloads `bge-small-en-v1.5` (about 130 MB) for the local embedder.
+
+`tests/fixtures/golden/sample_3min/` holds a synthetic annotation used only as an eval smoke test; real golden entries need a human annotator (spec section 11.1).
+
+Tests: `uv run pytest -m "not slow"` is the fast suite. The unmarked run adds real local whisper inference and a full pipeline run on the fixture (a few minutes on CPU).
+
+Known limits: the proxy sometimes returns segments without word timestamps, so clip edges can then only be as precise as segment edges (see `DECISIONS.md`); the proxy's free upstream models churn, and a stale alias shows up as `judge_fallback_used` events in `log.jsonl` and flat 38.0 scores.
 
 ## Configuration
 
@@ -153,7 +159,7 @@ Resolved per run from `config.yaml`, all keys optional:
 
 | Status | Phase |
 |---|---|
-| 🔲 | **Phase 1** — extraction engine, CLI only: probe → transcribe → atomize → generate → prefilter → judge → refine (contiguous) → gate → dedupe → select, plus `inspect`/`cost`/`eval` |
+| ✅ (eval set pending) | **Phase 1** — extraction engine, CLI only: probe → transcribe → atomize → generate → prefilter → judge → refine (contiguous) → gate → dedupe → select, plus `inspect`/`cost`/`eval` |
 | 🔲 | **Phase 2** — accurate cut + loudnorm render, real audio features (rms/silence), audio-event generator |
 | 🔲 | **Phase 3** — burned-in captions, multi-segment clips, FastAPI service + Postgres job queue, object storage |
 | 🔲 | **Phase 4** — Next.js review UI (approve/reject/adjust by dragging on transcript), center/face reframing, optional diarization |

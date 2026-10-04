@@ -604,3 +604,70 @@ reviewed at each phase boundary (spec section 15).
   then `coverage`) -- it was never a deliberate generator-priority policy, just how dict
   insertion order works out. documented in code near the merge logic so a future reader doesn't
   mistake it for intentional prioritization.
+
+- 2026-09-06: milestone m9 (`clipper/stages/judge.py`, `clipper/prompts/judge_v1.md`, spec
+  section 4.7, section 8) judgment calls:
+  - **score-at-judge-time cross-milestone contract.** spec section 8's formula subtracts
+    `penalties.boundary`/`penalties.silence` (computed in M10, refine boundaries) and
+    `penalties.redundancy` (computed in M13, dedupe) -- none of which exist yet at the judge
+    stage. `JudgedCandidate.score` is a required `float`, though, so SOME value has to be written
+    now. resolution: `compute_score` (in `judge.py`, per the phase-1 plan's earlier decision to
+    colocate it there rather than a shared scoring module) treats all three penalties as `0.0` at
+    this stage -- this is a genuinely correct application of the formula given the information
+    available now, not a stand-in approximation. **this is a contract M10 and M13 must honor**:
+    `RefinedCandidate.score` (M10, once boundary/silence penalties are known) and the dedupe
+    loser's score (M13, once redundancy is known) must RECOMPUTE `score` from the same formula
+    with the real penalty values, not treat the judge-stage `score` as final. `RefinedCandidate`
+    extending `JudgedCandidate` and inheriting (then overwriting) `score` is consistent with this.
+  - **`standalone_level == 3` short-circuits `compute_score` to exactly `0.0`.** spec section 8's
+    adjustment table maps `standalone_level == 3` to "reject", not a number -- the actual hard
+    reject is enforced later, in the gate stage (M11, spec section 4.9). since a
+    `standalone_level == 3` candidate's score is meaningless (it gets gated out regardless of the
+    number), inventing an undefined numeric substitute for "reject" would be worse than just
+    special-casing the return to `0.0` before the base formula is even evaluated. tested
+    explicitly with dimensions that would otherwise produce the maximum possible score, to prove
+    the short-circuit -- not just that the formula happens to land low.
+  - **fallback `JudgeResult` (spec section 7, deferred by M6 to this milestone) on
+    `LLMSchemaError` -- and also on `openai.OpenAIError`.** the spec only names
+    `LLMSchemaError`'s retries-exhausted case, but `openai.OpenAIError` (connection errors,
+    timeouts, rate limits, api status errors) is caught alongside it for the same reason
+    `clipper/generators/llm_pass.py` (M7) already does: with up to 8 concurrent judge calls in
+    flight (spec section 4.7), a single candidate's transient network error must not propagate
+    and take down every other candidate's judge call -- that's exactly as "never crash" (spec
+    section 1) as a schema failure. fields the spec's fallback description doesn't specify a
+    value for:
+    - `title` (required on `JudgeResult`): the candidate's own `generator_hint` if it has one
+      (still grounded in something real about the candidate, not invented), else the literal
+      placeholder `"(judge failed)"`.
+    - `suggested_atom_start`/`suggested_atom_end`: the candidate's own `atom_start`/`atom_end` --
+      i.e. the fallback recommends no boundary adjustment.
+    - `missing_context`: `None`.
+    fallback's `standalone_level` is `2`, not `3` -- normal (non-short-circuited) score
+    computation applies to a fallback result, since dimensions=5 uniformly already produces a
+    predictably low-but-not-zero score without needing the reject short-circuit.
+  - **judge llm response model is NOT `clipper.types.JudgeResult` directly.** `complete_structured`
+    is called with a new `JudgeLLMResponse` (defined in `judge.py`, same "llm-response-shape
+    models live next to the calling code" precedent as `clipper/generators/llm_pass.py`'s
+    `GeneratorProposal`/`GeneratorOutput`) that has every `JudgeResult` field EXCEPT
+    `candidate_id`. asking the judge llm to invent/echo back a `candidate_id` it has no way to
+    know serves no purpose and adds a spurious failure mode; `_judge_one` sets `candidate_id`
+    itself from the `Candidate` being judged after a successful call. `JudgeLLMResponse` reuses
+    `clipper.types`'s `_validate_dimensions`/`_validate_standalone_level` (module-private, but the
+    single source of truth `types.py`'s own docstring calls out for `JUDGE_DIMENSIONS`) so an
+    out-of-range dimension score or standalone_level fails schema validation on THIS model --
+    which `complete_structured` retries against -- rather than only surfacing once the final
+    `JudgeResult` is constructed from an already "successful" call.
+  - **`keyword_bonus` formula**: `5 * matched_keywords / len(keywords)`, `0.0` if
+    `cfg.keywords` is empty. spec section 8 only gives the max (5); this reuses the phase-1
+    plan's own earlier-reasoned interpretation rather than inventing a new one. "matched" means a
+    configured keyword appears as a case-insensitive substring of the candidate's concatenated
+    atom text (`atom_start`..`atom_end` inclusive) -- consistent with how `lexical_hit` and other
+    text-membership checks are done elsewhere in this codebase.
+  - **context-window boundary-atom inclusion rule.** both `collect_previous_context` (atoms up to
+    60s before) and `collect_following_context` (atoms up to 30s after) measure an atom's distance
+    from the candidate's boundary atom (`candidate_start_ms - atom.start_ms` looking backward,
+    `atom.end_ms - candidate_end_ms` looking forward) and INCLUDE the atom if that distance is
+    `<= window_ms` -- i.e. an atom landing exactly at the limit is kept; the first (and, since
+    atoms are chronologically ordered and ids are contiguous, therefore every subsequent) atom
+    whose distance exceeds the window is excluded and the walk stops there. tested explicitly at
+    the exact boundary and one millisecond past it in both directions.

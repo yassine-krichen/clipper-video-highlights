@@ -254,6 +254,29 @@ def _build_client() -> OpenAI:
     return OpenAI(base_url=base_url, api_key=api_key)
 
 
+def _words_from_segments(segments: list[dict]) -> list[Word]:
+    """approximate word timings by spreading each segment's duration over its
+    words in proportion to their length. used only when the proxy returns
+    segments but drops `words` (observed with freellmapi, 2026-10-04). boundaries
+    are then only as precise as the segment edges; see DECISIONS.md."""
+    words: list[Word] = []
+    for segment in segments:
+        tokens = str(segment.get("text", "")).split()
+        if not tokens:
+            continue
+        start_ms = round(float(segment["start"]) * 1000)
+        end_ms = round(float(segment["end"]) * 1000)
+        total_chars = sum(len(t) for t in tokens)
+        cursor = float(start_ms)
+        for token in tokens:
+            share = (end_ms - start_ms) * len(token) / total_chars
+            words.append(
+                Word(text=token, start_ms=round(cursor), end_ms=round(cursor + share), confidence=None)
+            )
+            cursor += share
+    return words
+
+
 def _parse_transcription_response(response: TranscriptionVerbose) -> Transcript:
     words = [
         Word(
@@ -265,6 +288,8 @@ def _parse_transcription_response(response: TranscriptionVerbose) -> Transcript:
         for w in (response.words or [])
     ]
     segments = [s.model_dump() for s in (response.segments or [])]
+    if not words and segments:
+        words = _words_from_segments(segments)
 
     return Transcript(
         language=response.language or "auto",

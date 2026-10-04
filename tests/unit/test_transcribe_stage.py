@@ -188,3 +188,20 @@ class TestRunTranscribeLanguage:
         transcribe_stage.run_transcribe(run_dir, Config(transcriber="groq", language="fr"))
 
         assert captured["language"] == "fr"
+
+
+def test_empty_transcript_fails_loudly_instead_of_flowing_downstream(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _EmptyTranscriber:
+        def transcribe(self, wav: Path, language: str | None) -> Transcript:
+            return _stub_transcript("faster-whisper").model_copy(update={"words": []})
+
+    run_dir = tmp_path / "run"
+    _touch_audio_wav(run_dir)
+    monkeypatch.setattr(transcribe_stage, "FasterWhisperTranscriber", lambda: _EmptyTranscriber())
+
+    with pytest.raises(RuntimeError, match="no words"):
+        transcribe_stage.run_transcribe(run_dir, Config(transcriber="faster_whisper"))
+
+    assert not (run_dir / "transcript.json").exists()

@@ -249,84 +249,91 @@ async def complete_structured[ResponseModelT: BaseModel](
     append_event(run_dir, "llm", "cache_miss", {"model": model, "cache_key": key})
 
     client = _build_client()
-    response_format = _json_schema_response_format(response_model)
+    try:
+        response_format = _json_schema_response_format(response_model)
 
-    current_user_prompt = user_prompt
-    last_error = ""
-    last_raw = ""
+        current_user_prompt = user_prompt
+        last_error = ""
+        last_raw = ""
 
-    for attempt in range(1, _MAX_ATTEMPTS + 1):
-        completion = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": current_user_prompt},
-            ],
-            response_format=response_format,
-            temperature=temperature,
-        )
-        raw_content = completion.choices[0].message.content or ""
-        last_raw = raw_content
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
+            completion = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": current_user_prompt},
+                ],
+                response_format=response_format,
+                temperature=temperature,
+            )
+            raw_content = completion.choices[0].message.content or ""
+            last_raw = raw_content
 
-        # every attempt is a real, billed api call -- whether it ends up
-        # passing schema validation or not -- so its tokens/cost are
-        # recorded here, unconditionally, once per attempt. recording only
-        # the final successful attempt (as this used to) silently dropped
-        # the cost of every failed attempt in a retry sequence, and dropped
-        # ALL cost data when every attempt failed. see DECISIONS.md.
-        usage = completion.usage
-        tokens_in = usage.prompt_tokens if usage else 0
-        tokens_out = usage.completion_tokens if usage else 0
-        cost_usd = _estimate_cost_usd(tokens_in, tokens_out)
-        _record_call_stat(
-            run_dir,
-            prompt_version,
-            key,
-            model=model,
-            cache_hit=False,
-            tokens_in=tokens_in,
-            tokens_out=tokens_out,
-            cost_usd=cost_usd,
-        )
+            # every attempt is a real, billed api call -- whether it ends up
+            # passing schema validation or not -- so its tokens/cost are
+            # recorded here, unconditionally, once per attempt. recording only
+            # the final successful attempt (as this used to) silently dropped
+            # the cost of every failed attempt in a retry sequence, and dropped
+            # ALL cost data when every attempt failed. see DECISIONS.md.
+            usage = completion.usage
+            tokens_in = usage.prompt_tokens if usage else 0
+            tokens_out = usage.completion_tokens if usage else 0
+            cost_usd = _estimate_cost_usd(tokens_in, tokens_out)
+            _record_call_stat(
+                run_dir,
+                prompt_version,
+                key,
+                model=model,
+                cache_hit=False,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                cost_usd=cost_usd,
+            )
 
-        try:
-            parsed = response_model.model_validate_json(raw_content)
-        except (ValidationError, ValueError) as exc:
-            last_error = str(exc)
+            try:
+                parsed = response_model.model_validate_json(raw_content)
+            except (ValidationError, ValueError) as exc:
+                last_error = str(exc)
+                append_event(
+                    run_dir,
+                    "llm",
+                    "retry",
+                    {"model": model, "attempt": attempt, "error": last_error},
+                )
+                current_user_prompt = (
+                    f"{user_prompt}\n\nyour previous response failed validation with this "
+                    f"error -- respond again with valid json matching the schema:\n{last_error}"
+                )
+                continue
+
+            cache.store_cached_response(run_dir, key, json.loads(raw_content))
             append_event(
                 run_dir,
                 "llm",
-                "retry",
-                {"model": model, "attempt": attempt, "error": last_error},
+                "call_succeeded",
+                {
+                    "model": model,
+                    "attempts": attempt,
+                    "tokens_in": tokens_in,
+                    "tokens_out": tokens_out,
+                },
             )
-            current_user_prompt = (
-                f"{user_prompt}\n\nyour previous response failed validation with this "
-                f"error -- respond again with valid json matching the schema:\n{last_error}"
-            )
-            continue
+            return parsed
 
-        cache.store_cached_response(run_dir, key, json.loads(raw_content))
         append_event(
             run_dir,
             "llm",
-            "call_succeeded",
-            {
-                "model": model,
-                "attempts": attempt,
-                "tokens_in": tokens_in,
-                "tokens_out": tokens_out,
-            },
+            "call_failed",
+            {"model": model, "attempts": _MAX_ATTEMPTS, "error": last_error},
         )
-        return parsed
-
-    append_event(
-        run_dir,
-        "llm",
-        "call_failed",
-        {"model": model, "attempts": _MAX_ATTEMPTS, "error": last_error},
-    )
-    raise LLMSchemaError(
-        f"llm call failed schema validation after {_MAX_ATTEMPTS} attempts: {last_error}",
-        last_error=last_error,
-        raw_response=last_raw,
-    )
+        raise LLMSchemaError(
+            f"llm call failed schema validation after {_MAX_ATTEMPTS} attempts: {last_error}",
+            last_error=last_error,
+            raw_response=last_raw,
+        )
+    finally:
+        # an unclosed async client leaves sockets for asyncio.run() to tear down
+        # after the loop is gone, which prints "event loop is closed" noise.
+        close = getattr(client, "close", None)  # test fakes have no close()
+        if close is not None:
+            await close()

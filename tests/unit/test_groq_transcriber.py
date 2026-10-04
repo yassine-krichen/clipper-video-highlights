@@ -146,3 +146,20 @@ class TestGroqTranscriberTranscribe:
         assert captured_kwargs["model"] == "whisper-large-v3-turbo"
         assert captured_kwargs["response_format"] == "verbose_json"
         assert captured_kwargs["timestamp_granularities"] == ["word", "segment"]
+
+
+class TestWordsFromSegments:
+    def test_spreads_segment_duration_over_words_by_length(self) -> None:
+        from clipper.transcribers.groq import _words_from_segments
+
+        words = _words_from_segments([{"start": 1.0, "end": 2.0, "text": " aa bbbb"}])
+
+        assert [w.text for w in words] == ["aa", "bbbb"]
+        assert words[0].start_ms == 1000
+        assert words[0].end_ms == words[1].start_ms == 1333
+        assert words[1].end_ms == 2000
+
+    def test_segment_without_text_yields_no_words(self) -> None:
+        from clipper.transcribers.groq import _words_from_segments
+
+        assert _words_from_segments([{"start": 0.0, "end": 1.0, "text": "  "}]) == []

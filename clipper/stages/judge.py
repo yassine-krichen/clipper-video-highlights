@@ -66,6 +66,23 @@ _STANDALONE_ADJUSTMENT: dict[int, float] = {0: 0.0, 1: -4.0, 2: -12.0}  # 3 is s
 _SYSTEM_PROMPT = (Path(__file__).parent.parent / "prompts" / "judge_v1.md").read_text(encoding="utf-8")
 
 
+class JudgeDimensions(BaseModel):
+    """the seven judge dimensions as named fields. a bare `dict[str, int]`
+    renders as an object with no `properties`, which strict structured output
+    collapses to `{}` (seen live against the proxy: every judge call came back
+    with empty dimensions). named fields give the model keys to fill in.
+    one field per `JUDGE_DIMENSIONS` entry; the range check stays in
+    `_validate_dimensions` since min/max in the schema is not portable."""
+
+    hook: int
+    value: int
+    emotion: int
+    curiosity: int
+    novelty: int
+    completeness: int
+    payoff: int
+
+
 class JudgeLLMResponse(BaseModel):
     """the judge llm's raw response shape -- everything `JudgeResult` (spec
     section 3) has EXCEPT `candidate_id`. defined here, next to the code
@@ -86,7 +103,7 @@ class JudgeLLMResponse(BaseModel):
     the final `JudgeResult` is constructed from an already "successful" call.
     """
 
-    dimensions: dict[str, int]
+    dimensions: JudgeDimensions
     standalone_level: int
     suggested_atom_start: int
     suggested_atom_end: int
@@ -96,8 +113,9 @@ class JudgeLLMResponse(BaseModel):
 
     @field_validator("dimensions")
     @classmethod
-    def _check_dimensions(cls, value: dict[str, int]) -> dict[str, int]:
-        return _validate_dimensions(value)
+    def _check_dimensions(cls, value: JudgeDimensions) -> JudgeDimensions:
+        _validate_dimensions(value.model_dump())
+        return value
 
     @field_validator("standalone_level")
     @classmethod

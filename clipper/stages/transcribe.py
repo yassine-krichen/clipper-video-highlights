@@ -89,6 +89,11 @@ def run_transcribe(run_dir: Path, cfg: Config) -> None:
 
     wall_ms = round((time.monotonic() - wall_start) * 1000)
 
+    if not transcript.words:
+        # an empty transcript would silently flow through to a manifest with no clips.
+        append_event(run_dir, _STAGE, "failed", {"reason": "transcript has no words"})
+        raise RuntimeError("transcription produced no words (silent audio or provider error)")
+
     (run_dir / _TRANSCRIPT_JSON_FILENAME).write_text(transcript.model_dump_json(indent=2))
 
     append_event(

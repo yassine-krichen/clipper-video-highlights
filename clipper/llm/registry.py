@@ -7,7 +7,15 @@ routes through one self-hosted openai-compatible proxy (freellmapi), which
 routes internally by `model=` name. so this registry's job collapses to:
 alias -> the model-name string to send to freellmapi.
 
-IMPORTANT: the model-name strings below are PLACEHOLDERS. they follow each
+CHECKED 2026-10-04 with a live chat call per name (the proxy's `GET /models`
+catalog is NOT reliable: it listed gemini-2.5-flash and claude-sonnet-4-5 as
+available, but the first rate-limited/404ed). gemini-flash, gemini-pro and
+groq-llama answered; claude-sonnet did not (404, not in the catalog). the
+free proxy's upstreams churn, so re-check an alias when judge calls start
+falling back ("judge_fallback_used" events in log.jsonl). `gemini-pro` has no
+real pro model behind it right now.
+
+the model-name strings were originally PLACEHOLDERS. they follow each
 provider's own public naming convention (e.g. google's "gemini-2.0-flash",
 groq's "llama-3.3-70b-versatile") but this codebase has no way to verify
 freellmapi's actual model catalog without calling the real, live proxy,
@@ -20,9 +28,9 @@ DECISIONS.md.
 from __future__ import annotations
 
 _MODEL_ALIASES: dict[str, str] = {
-    "gemini-flash": "gemini-2.0-flash",
-    "gemini-pro": "gemini-2.5-pro",
-    "groq-llama": "llama-3.3-70b-versatile",
+    "gemini-flash": "gemini-3.1-flash-lite",
+    "gemini-pro": "gemini-3-flash-preview",
+    "groq-llama": "llama-3.3-70b-fp8-fast",
     "claude-sonnet": "claude-sonnet-4-5",
 }
 

@@ -483,3 +483,14 @@ class TestRunJudgeStageWiring:
 
         judged_raw = json.loads((run_dir / "judged.json").read_text())
         assert judged_raw == []
+
+
+def test_judge_response_schema_names_every_dimension_for_strict_structured_output() -> None:
+    from clipper.llm.client import _json_schema_response_format
+
+    schema = _json_schema_response_format(judge_stage.JudgeLLMResponse)["json_schema"]["schema"]
+    dimensions = schema["$defs"]["JudgeDimensions"]
+
+    # a dict[str, int] schema has no properties, and the live proxy then returned {}
+    assert set(dimensions["properties"]) == set(JUDGE_DIMENSIONS)
+    assert dimensions["additionalProperties"] is False

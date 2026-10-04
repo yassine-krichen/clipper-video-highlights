@@ -142,19 +142,19 @@ class TestComputeScore:
 
 class TestComputeKeywordBonus:
     def test_no_keywords_configured_returns_zero(self) -> None:
-        assert judge_stage._compute_keyword_bonus("some transcript text", []) == 0.0
+        assert judge_stage.compute_keyword_bonus("some transcript text", []) == 0.0
 
     def test_matches_documented_formula(self) -> None:
         # 2 of 4 configured keywords appear (case-insensitively) in the text
         text = "we talked about Pricing strategy and hiring mistakes"
         keywords = ["pricing", "hiring", "layoffs", "funding"]
 
-        bonus = judge_stage._compute_keyword_bonus(text, keywords)
+        bonus = judge_stage.compute_keyword_bonus(text, keywords)
 
         assert bonus == pytest.approx(5.0 * 2 / 4)
 
     def test_no_keyword_matches_returns_zero(self) -> None:
-        bonus = judge_stage._compute_keyword_bonus("nothing relevant here", ["funding", "layoffs"])
+        bonus = judge_stage.compute_keyword_bonus("nothing relevant here", ["funding", "layoffs"])
 
         assert bonus == 0.0
 

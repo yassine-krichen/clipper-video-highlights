@@ -58,6 +58,7 @@ _PREVIOUS_CONTEXT_WINDOW_MS = 60_000
 _FOLLOWING_CONTEXT_WINDOW_MS = 30_000
 _MAX_CONCURRENT_JUDGE_CALLS = 8  # spec section 4.7: "run concurrently (default 8 in flight)"
 _KEYWORD_BONUS_MAX = 5.0  # spec section 8: "keyword_bonus max 5"
+_PENALTY_NAMES = ("boundary", "silence", "redundancy")
 _FALLBACK_REASON = "judge failed"  # spec section 7, verbatim
 
 _STANDALONE_ADJUSTMENT: dict[int, float] = {0: 0.0, 1: -4.0, 2: -12.0}  # 3 is short-circuited, see compute_score
@@ -108,8 +109,15 @@ def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
-def compute_score(judge: JudgeResult, weights: ScoringWeights, keyword_bonus: float) -> float:
-    """spec section 8's exact formula, penalties fixed at `0.0` (see module
+def compute_score(
+    judge: JudgeResult,
+    weights: ScoringWeights,
+    keyword_bonus: float,
+    penalties: dict[str, float] | None = None,
+) -> float:
+    """spec section 8's exact formula. `penalties` defaults to none (`0.0`
+    each), which is the correct input at judge time; refine and dedupe pass
+    the real boundary/silence/redundancy values to recompute (see module
     docstring's cross-milestone contract note).
 
     `standalone_level == 3` ("depends on prior context") maps to "reject"
@@ -126,11 +134,12 @@ def compute_score(judge: JudgeResult, weights: ScoringWeights, keyword_bonus: fl
 
     base = sum(getattr(weights, dimension) * judge.dimensions[dimension] for dimension in JUDGE_DIMENSIONS)
     standalone_adj = _STANDALONE_ADJUSTMENT[judge.standalone_level]
-    raw_score = base * 10 + standalone_adj - 0.0 - 0.0 - 0.0 + keyword_bonus
+    penalty_total = sum((penalties or {}).get(name, 0.0) for name in _PENALTY_NAMES)
+    raw_score = base * 10 + standalone_adj - penalty_total + keyword_bonus
     return _clamp(raw_score, 0.0, 100.0)
 
 
-def _compute_keyword_bonus(transcript_text: str, keywords: list[str]) -> float:
+def compute_keyword_bonus(transcript_text: str, keywords: list[str]) -> float:
     """`5 * matched_keywords / len(keywords)`, `0` if no keywords are
     configured (spec section 8 gives the max but not the formula -- see
     DECISIONS.md for this milestone's interpretation). a keyword "matches"
@@ -310,7 +319,7 @@ async def _judge_one(
             )
 
         transcript_text = " ".join(atom.text for atom in candidate_atoms)
-        keyword_bonus = _compute_keyword_bonus(transcript_text, cfg.keywords)
+        keyword_bonus = compute_keyword_bonus(transcript_text, cfg.keywords)
         score = compute_score(judge_result, weights, keyword_bonus)
 
         judged_candidate = JudgedCandidate(**candidate.model_dump(), judge=judge_result, score=score)

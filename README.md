@@ -1,7 +1,6 @@
 <div align="center">
-  <img src="docs/cover.png" alt="Clipper cover" width="100%" />
   <h1>
-    Clipper <sup><sub>v0.1.0-spec</sub></sup>
+    Clipper <sup><sub>v0.1.0</sub></sup>
   </h1>
   <p>
     <em>Finds the clips a good editor would pick from a long-form video, with exact timestamps, a score breakdown, and a reason.</em>
@@ -12,7 +11,7 @@
   ![uv](https://img.shields.io/badge/deps-uv-6340ac)
   ![Pydantic](https://img.shields.io/badge/Pydantic-v2-e92063?logo=pydantic)
   ![Status](https://img.shields.io/badge/status-phase%201%20implemented-green)
-  ![License](https://img.shields.io/badge/license-MIT-blue)
+  ![License](https://img.shields.io/badge/license-PolyForm%20Strict-red)
 </div>
 
 > **Status:** phase 1 (extraction engine, CLI only) is implemented and ran end to end on `tests/fixtures/sample_3min.mp4` against the live LLM proxy. Still open from the phase 1 "done when": a real golden set (5 hand-annotated videos) to measure hit@5 / recall_pool / trap_rate, and a 60-minute cost check. The system is described below as specified in [`clipper-spec.md`](./clipper-spec.md).
@@ -23,13 +22,13 @@ Every existing short-form clipper — Opus Clip, Vizard, Choppity — collapses 
 
 Clipper treats clip discovery as the product, not a side effect of rendering. It takes a long mp4, transcribes it, generates a large pool of candidate windows from several independent deterministic and LLM-based generators, has an LLM judge score each candidate on seven named dimensions (hook, value, emotion, curiosity, novelty, completeness, payoff), then deterministically refines boundaries, filters, deduplicates, and greedily selects a diverse final set. Every clip ships with its full score breakdown and a one-line reason grounded in the transcript — never a bare number.
 
-The interesting bet: recall early, precision late. Cheap deterministic generators (discourse breaks, lexical hooks, a coverage safety net) and one long-context LLM pass over the whole transcript over-generate 40-250 raw candidates per episode; only the pre-filtered top set pays for an LLM judge call. This keeps a 60-minute episode under $0.50 in LLM cost while still measuring recall against human-annotated "must find" moments, not just precision on whatever the model happened to select. Rendering, captions, and reframing are explicitly downstream and out of scope until discovery quality is proven — phase 1 ships as a CLI-only Python package with no web, queue, or database.
+The interesting bet: recall early, precision late. Cheap deterministic generators (discourse breaks, lexical hooks, a coverage safety net) and one long-context LLM pass over the whole transcript over-generate 40-250 raw candidates per episode; only the pre-filtered top set pays for an LLM judge call. The design target is under $0.50 of LLM cost for a 60-minute episode (not yet verified; the 60-minute cost check is still open), while still measuring recall against human-annotated "must find" moments, not just precision on whatever the model happened to select. Rendering, captions, and reframing are explicitly downstream and out of scope until discovery quality is proven — phase 1 ships as a CLI-only Python package with no web, queue, or database.
 
 ## Features
 
 **LLM-blind timestamps** — the LLM only ever sees and emits atom (sentence) ids, never raw timestamps; code maps ids to word-level timings, so the model can't hallucinate a boundary mid-word.
 
-**Multi-generator candidate pool** — five generation strategies (`llm_pass`, `discourse`, `lexical`, `coverage`, `query`) each propose windows independently; candidates are merged by atom range with generator provenance kept for debugging.
+**Multi-generator candidate pool** — four generation strategies (`llm_pass`, `discourse`, `lexical`, `coverage`) each propose windows independently, with a keyword `query` generator specified for a later phase; candidates are merged by atom range with generator provenance kept for debugging.
 
 **Explicit, versioned scoring** — a documented formula turns seven 1-10 judge dimensions plus standalone-level and penalties into a single 0-100 score in `clipper/config.py`, per-content-type overridable, never a black box.
 
@@ -102,7 +101,7 @@ clipper/
     prompts/        generator_v1.md judge_v1.md
     stages/         probe.py transcribe.py atomize.py generate.py
                      prefilter.py judge.py refine.py gate.py dedupe.py select.py   (render.py: phase 2)
-    generators/     llm_pass.py discourse.py lexical.py coverage.py query.py
+    generators/     llm_pass.py discourse.py lexical.py coverage.py
     transcribers/   groq.py faster_whisper.py
     embed/          local.py api.py
     media/          ffmpeg.py probe.py
@@ -146,7 +145,7 @@ Resolved per run from `config.yaml`, all keys optional:
 | `min_duration_ms` / `max_duration_ms` | `25000` / `90000` | Clip length bounds |
 | `content_type` | `podcast` | `podcast \| interview \| lecture \| stream \| auto` — adjusts scoring weights and hook list |
 | `language` | `auto` | ISO 639-1 or provider auto-detect |
-| `keywords` | `[]` | Steers the `query` generator |
+| `keywords` | `[]` | Steers the `query` generator (specified, not yet implemented) |
 | `editorial_instructions` | `""` | Free text appended to the judge prompt |
 | `platform` | `shorts` | `shorts \| tiktok \| reels \| generic` |
 | `allow_multi_segment` | `false` | Enables cut-and-concat multi-segment clips (phase 3) |
@@ -169,16 +168,16 @@ Each phase ends with a git tag and does not start the next until its "done when"
 
 ## License
 
-MIT © 2026 Yassine Krichen
+**Source-available, not open source.** Clipper is published under the
+[PolyForm Strict License 1.0.0](LICENSE): you may read, run, and learn from the code
+for personal, research, or evaluation use.
+
+You may **not** use it commercially, redistribute it, rebrand it, or publish modified
+versions without written permission. Copyright (c) 2026 Yassine Krichen. All rights
+not granted by the license are reserved.
+
+For commercial licensing or collaboration: krichenyassine22@gmail.com
 
 ---
 
 Built by [Yassine Krichen](https://github.com/yassine-krichen)
-
-## Before You Publish
-
-- [ ] Add `docs/cover.png` — generate with: *"Clipper — a terminal-style dashboard showing a video timeline with colored candidate clip markers and a score breakdown panel. Dark UI, high contrast, professional software screenshot aesthetic. Wide banner format, 1400×600px. No people. No text overlays."*
-- [ ] Add a `LICENSE` file with standard MIT text (author: Yassine Krichen, year 2026) — inferred from solo-author, no-contributors signal in the spec; confirm this is the intended license before the repo goes public.
-- [ ] Add `.env.example` once the LLM/transcriber API key names are finalized in `clipper/config.py` — referenced in Getting Started but doesn't exist yet.
-- [ ] Once phase 1 code exists, replace the "planned" Getting Started block with verified, copy-pasteable commands and add real screenshots/output to a `docs/demo/` section.
-- [ ] Create `DECISIONS.md` at repo root (spec section 15) before writing any code — the spec requires every claude-code judgment call during implementation to be logged there.
